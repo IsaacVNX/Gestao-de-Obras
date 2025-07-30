@@ -1,7 +1,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  /* opções de configuração aqui */
   typescript: {
     ignoreBuildErrors: true,
   },

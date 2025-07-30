@@ -1,7 +1,7 @@
-# Settings to manage and configure a Firebase App Hosting backend.
+# Configurações para gerenciar e configurar um backend de hospedagem de aplicativos do Firebase.
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
+  # Aumente este valor se desejar gerar automaticamente
+  # mais instâncias em resposta ao aumento de tráfego.
   maxInstances: 1
