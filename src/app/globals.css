@@ -1,0 +1,130 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Fix for browser autofill background color */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px hsl(var(--background)) inset !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+}
+
+/* Specific rule for login page to override general rule */
+.login-page-styles input:-webkit-autofill,
+.login-page-styles input:-webkit-autofill:hover,
+.login-page-styles input:-webkit-autofill:focus,
+.login-page-styles input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px hsl(var(--background)) inset !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+}
+
+/* New rule for autofill inside blue cards in light mode */
+.nova-obra-form-autofill input:-webkit-autofill,
+.nova-obra-form-autofill input:-webkit-autofill:hover,
+.nova-obra-form-autofill input:-webkit-autofill:focus,
+.nova-obra-form-autofill input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px hsl(var(--card)) inset !important;
+    -webkit-text-fill-color: hsl(var(--card-foreground)) !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background-color: hsl(var(--secondary) / 0.5);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--card-foreground) / 0.7);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--card-foreground));
+}
+
+.bg-login-background {
+    background-image: url('https://grupomatos.ind.br/storage/2024/10/Acompanhamento-atividades-17.04-7.JPEG.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-hero-background {
+    background-image: url('https://grupomatos.ind.br/storage/2024/10/Acompanhamento-atividades-17.04-7.JPEG.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bg-app-background {
+    background-image: url('https://grupomatos.ind.br/storage/2024/10/Acompanhamento-atividades-17.04-7.JPEG.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+
+@layer base {
+  :root {
+    --background: 220 13% 96%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 212 100% 50%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 212 100% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 14 83% 50%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 50.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+    --chart-1: 221 83% 53%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --tab-background: 220 13% 91%;
+
+    --sidebar: 212 100% 50%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-active: 240 100% 25%;
+    --sidebar-active-foreground: 0 0% 98%;
+    --sidebar-hover-background: 240 100% 25%;
+    
+    --sidebar-muted: 240 100% 25%;
+    --sidebar-muted-foreground: 0 0% 98%;
+    --sidebar-muted-active-background: 0 0% 100%;
+    --sidebar-muted-active-foreground: 212 100% 50%;
+    --sidebar-muted-hover-background: 0 0% 100%;
+    --sidebar-muted-hover-foreground: 212 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
