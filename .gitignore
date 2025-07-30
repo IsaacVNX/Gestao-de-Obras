@@ -1,4 +1,5 @@
 # dependencies
+/.idx
 /node_modules
 /.pnp
 .pnp.*
@@ -49,3 +50,4 @@ firestore-debug.log
 # idx
 .idx
 .modified
+dev.nix
