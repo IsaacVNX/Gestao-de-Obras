@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, HardHat, Users, Warehouse, Map, Truck, Building, Package, LogIn, LogOut, ClipboardCheck } from 'lucide-react';
+import { LayoutDashboard, HardHat, Users, Warehouse, Map, Truck, Building, Package, LogIn, LogOut, ClipboardCheck, UserPlus } from 'lucide-react';
 import React from 'react';
 
 export type SubNavItem = {
@@ -50,7 +50,7 @@ export const navLinks: NavItem[] = [
         icon: HardHat, 
         roles: ['admin', 'gestor', 'escritorio', 'encarregado', 'montador'],
         subItems: [
-            { key: 'obras-lista', href: '/obras', label: 'Lista de Obras', icon: HardHat, roles: ['admin', 'gestor', 'escritorio', 'encarregado', 'montador'] },
+             { key: 'obras-lista', href: '/obras', label: 'Lista de Obras', icon: HardHat, roles: ['admin', 'gestor', 'escritorio', 'encarregado', 'montador'], type: 'link' },
         ]
     },
     { 
@@ -59,7 +59,8 @@ export const navLinks: NavItem[] = [
         icon: Users, 
         roles: ['admin', 'gestor', 'escritorio'],
         subItems: [
-            { key: 'rh-users', href: '/rh', label: 'Gerenciamento de Usuários', icon: Users, roles: ['admin', 'gestor', 'escritorio'] },
+            { key: 'rh-users', href: '/rh', label: 'Gerenciamento de Usuários', icon: Users, roles: ['admin', 'gestor', 'escritorio'], type: 'link' },
+            { key: 'rh-new-user', href: '/rh/cadastros/usuarios/new', label: 'Novo Usuário', icon: UserPlus, roles: ['admin', 'gestor'], type: 'link' },
         ]
     },
     { 
@@ -68,7 +69,7 @@ export const navLinks: NavItem[] = [
         icon: Warehouse, 
         roles: ['admin', 'gestor'],
         subItems: [
-             { key: 'almoxarifado-painel', href: '/almoxarifado', label: 'Painel do Almoxarifado', icon: Warehouse, roles: ['admin', 'gestor'] },
+            { key: 'almoxarifado-painel', href: '/almoxarifado', label: 'Painel do Almoxarifado', icon: Warehouse, roles: ['admin', 'gestor'], type: 'link' },
         ]
     },
     { 
@@ -107,7 +108,7 @@ export const navLinks: NavItem[] = [
         icon: Map, 
         roles: ['admin', 'gestor'],
         subItems: [
-             { key: 'mapa-obras', href: '/mapa', label: 'Mapa de Obras', icon: Map, roles: ['admin', 'gestor'] },
+             { key: 'mapa-obras', href: '/mapa', label: 'Mapa de Obras', icon: Map, roles: ['admin', 'gestor'], type: 'link' },
         ]
     },
 ];

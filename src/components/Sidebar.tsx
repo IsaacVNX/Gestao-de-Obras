@@ -46,7 +46,7 @@ export default function Sidebar({
             {/* Primary Sidebar */}
             <div className={cn(
                 "bg-sidebar h-full flex flex-col transition-all duration-300 ease-in-out",
-                 isCollapsed ? "w-[68px]" : "w-[280px]"
+                 isCollapsed ? "w-[50px]" : "w-[270px]"
             )}>
                 <SidebarContent 
                     isPrimary={true}
@@ -56,22 +56,33 @@ export default function Sidebar({
                     setActiveMenuKey={setActiveMenuKey}
                     setIsSubMenuVisible={setIsSubMenuVisible}
                 />
-                 <div className="mt-auto p-2">
+                 <div className="mt-auto p-2 pr-0">
                     <TooltipProvider delayDuration={0}>
                          <Tooltip>
                             <TooltipTrigger asChild>
                                  <Button 
                                     variant="ghost" 
-                                    className="w-full justify-center text-sidebar-foreground hover:bg-sidebar-hover-background hover:text-sidebar-foreground"
+                                    className={cn(
+                                        "w-full text-sidebar-foreground hover:bg-sidebar-hover-background hover:text-sidebar-foreground rounded-l-md rounded-r-none",
+                                        isCollapsed ? "justify-center" : "justify-start"
+                                    )}
                                     onClick={handleCollapse}
                                 >
-                                    {isCollapsed ? <PanelRightClose className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-                                    <span className="sr-only">{getTooltipText()}</span>
+                                    <div className={cn("flex items-center", isCollapsed ? "" : "pl-3")}>
+                                        {isCollapsed ? <PanelRightClose className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                                        {!isCollapsed ? (
+                                            <span className="ml-3">{getTooltipText()}</span>
+                                        ) : (
+                                            <span className="sr-only">{getTooltipText()}</span>
+                                        )}
+                                    </div>
                                 </Button>
                             </TooltipTrigger>
+                            {isCollapsed && (
                              <TooltipContent side="right" className="bg-background text-foreground">
                                 <p>{getTooltipText()}</p>
                             </TooltipContent>
+                            )}
                         </Tooltip>
                     </TooltipProvider>
                 </div>
@@ -80,7 +91,7 @@ export default function Sidebar({
             {/* Secondary Sidebar (Sub-menu) */}
             <div className={cn(
                 "h-full bg-sidebar-muted transition-all duration-300 ease-in-out overflow-hidden",
-                activeMenuKey && isSubMenuVisible ? "w-[288px]" : "w-0"
+                activeMenuKey && isSubMenuVisible ? "w-[240px]" : "w-0"
             )}>
                  <SidebarContent
                     isPrimary={false}

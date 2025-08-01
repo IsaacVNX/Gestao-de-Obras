@@ -61,13 +61,13 @@ function InnerAppLayout({ children }: { children: ReactNode }) {
   const getLeftMargin = () => {
     // Sub-menu is active and visible
     if (activeMenuKey && isSubMenuVisible) {
-        return 'lg:ml-[356px]'; // 68px (collapsed) + 288px (sub-menu)
+        return 'lg:ml-[290px]'; // 50px (collapsed primary) + 240px (sub-menu)
     }
     // Only the main sidebar is visible (either collapsed or expanded)
     if (isSidebarCollapsed) {
-        return 'lg:ml-[68px]';
+        return 'lg:ml-[50px]';
     }
-    return 'lg:ml-[280px]';
+    return 'lg:ml-[270px]';
   };
 
 
@@ -99,9 +99,9 @@ function InnerAppLayout({ children }: { children: ReactNode }) {
             "ml-0", // No margin on mobile, sidebar overlays
             getLeftMargin()
           )}>
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 bg-app-background">
+          <div className="flex-1 bg-app-background">
               <div className="absolute inset-0 z-0 bg-background/95" />
-              <div className="relative z-10">
+              <div className="relative z-10 p-4 sm:p-6 lg:p-8">
                   {children}
               </div>
           </div>

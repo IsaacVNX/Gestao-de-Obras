@@ -2,15 +2,15 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
-import { Search, PlusCircle, Building, ChevronLeft, ChevronRight, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download } from "lucide-react";
 import { useAuth } from '@/hooks/use-auth';
 import { useLoading } from '@/hooks/use-loading';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -35,9 +35,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export type Cliente = {
     id: string;
@@ -46,9 +48,13 @@ export type Cliente = {
     cnpj: string;
     telefone: string;
     email: string;
+    status: 'ativo' | 'inativo';
 };
 
-const CLIENTS_PER_PAGE = 10;
+type SortConfig = {
+    key: keyof Cliente;
+    direction: 'ascending' | 'descending';
+};
 
 export function ClientManagement() {
     const { user } = useAuth();
@@ -59,7 +65,9 @@ export function ClientManagement() {
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
+    const [activeTab, setActiveTab] = useState<'ativo' | 'inativo' | 'todos'>('ativo');
+    const [selectedClients, setSelectedClients] = useState<string[]>([]);
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'razaoSocial', direction: 'ascending' });
     
     const canManageClients = user?.role === 'admin' || user?.role === 'gestor';
 
@@ -68,7 +76,7 @@ export function ClientManagement() {
             setLoading(true);
             try {
                 const clientsSnapshot = await getDocs(collection(db, 'clientes'));
-                const clientsList = clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
+                const clientsList = clientsSnapshot.docs.map(doc => ({ id: doc.id, status: 'ativo', ...doc.data() } as Cliente));
                 setClientes(clientsList);
             } catch (error) {
                 console.error("Erro ao buscar clientes:", error);
@@ -80,194 +88,221 @@ export function ClientManagement() {
         fetchClients();
     }, [toast]);
 
-    const handleDeleteClient = async (clientId: string) => {
-        try {
-            await deleteDoc(doc(db, 'clientes', clientId));
-            setClientes(prev => prev.filter(c => c.id !== clientId));
-            toast({ title: 'Sucesso', description: 'Cliente excluído com sucesso.' });
-        } catch (error) {
-            console.error("Erro ao excluir cliente:", error);
-            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível excluir o cliente.' });
+    const handleBulkDelete = async () => {
+        // Placeholder for bulk deletion logic
+        toast({ title: 'Em desenvolvimento', description: 'A exclusão em massa será implementada em breve.' });
+    };
+
+    const handleBulkInactivate = async () => {
+        // Placeholder for bulk inactivation logic
+        toast({ title: 'Em desenvolvimento', description: 'A inativação em massa será implementada em breve.' });
+    };
+
+    const filteredAndSortedClients = useMemo(() => {
+        let filtered = clientes;
+
+        if (activeTab !== 'todos') {
+            filtered = filtered.filter(c => c.status === activeTab);
+        }
+
+        if (searchTerm) {
+            const lowerCaseTerm = searchTerm.toLowerCase();
+            filtered = filtered.filter(c => 
+                c.razaoSocial.toLowerCase().includes(lowerCaseTerm) ||
+                c.nomeFantasia.toLowerCase().includes(lowerCaseTerm) ||
+                c.cnpj.toLowerCase().includes(lowerCaseTerm)
+            );
+        }
+        
+        if (sortConfig !== null) {
+            filtered.sort((a, b) => {
+                if (a[sortConfig.key] < b[sortConfig.key]) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (a[sortConfig.key] > b[sortConfig.key]) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        
+        return filtered;
+    }, [clientes, activeTab, searchTerm, sortConfig]);
+
+    const requestSort = (key: keyof Cliente) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (key: keyof Cliente) => {
+        if (!sortConfig || sortConfig.key !== key) {
+            return <ArrowUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />;
+        }
+        return sortConfig.direction === 'ascending' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
+    };
+    
+    const clientCounts = useMemo(() => {
+        return {
+            ativo: clientes.filter(c => c.status === 'ativo').length,
+            inativo: clientes.filter(c => c.status === 'inativo').length,
+            todos: clientes.length,
+        }
+    }, [clientes]);
+
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            setSelectedClients(filteredAndSortedClients.map(c => c.id));
+        } else {
+            setSelectedClients([]);
         }
     };
     
-    const filteredClients = useMemo(() => {
-        if (!searchTerm) return clientes;
-        const lowerCaseTerm = searchTerm.toLowerCase();
-        return clientes.filter(c => 
-            c.razaoSocial.toLowerCase().includes(lowerCaseTerm) ||
-            c.nomeFantasia.toLowerCase().includes(lowerCaseTerm) ||
-            c.cnpj.toLowerCase().includes(lowerCaseTerm)
-        );
-    }, [clientes, searchTerm]);
+    const handleSelectClient = (id: string, checked: boolean) => {
+        if (checked) {
+            setSelectedClients(prev => [...prev, id]);
+        } else {
+            setSelectedClients(prev => prev.filter(clientId => clientId !== id));
+        }
+    };
 
-    const paginatedClients = useMemo(() => {
-        const startIndex = (currentPage - 1) * CLIENTS_PER_PAGE;
-        return filteredClients.slice(startIndex, startIndex + CLIENTS_PER_PAGE);
-    }, [filteredClients, currentPage]);
+    const isAllSelected = selectedClients.length > 0 && selectedClients.length === filteredAndSortedClients.length;
 
-    const totalPages = Math.ceil(filteredClients.length / CLIENTS_PER_PAGE) || 1;
 
-     const renderPagination = () => (
-        <div className="flex items-center justify-end space-x-2 py-4 px-4">
-            <span className="text-sm text-black">
-                Página {currentPage} de {totalPages}
-            </span>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="bg-white text-black hover:bg-white/80"
-            >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-            </Button>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="bg-white text-black hover:bg-white/80"
-            >
-                Próxima
-                <ChevronRight className="h-4 w-4" />
-            </Button>
-        </div>
-    );
-    
     return (
-        <>
-            <div className="flex items-center justify-between mb-4">
-                 <div className="relative w-full md:max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black" />
-                    <Input 
-                        placeholder="Pesquisar por razão social, nome fantasia ou CNPJ..."
-                        className="pl-10 bg-gray-200 border-black text-black"
-                        value={searchTerm}
-                        onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                    />
-                </div>
-                {canManageClients && (
-                    <Button 
-                        onClick={() => { setIsLoading(true); router.push('/expedicao/cadastros/clientes/new')}}
-                        className="transition-transform duration-200 hover:scale-105"
-                    >
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Novo Cliente
-                    </Button>
-                )}
+        <div className="space-y-4">
+            {/* Header Actions */}
+            <div className="flex items-center gap-2">
+                 <Button 
+                    onClick={() => { setIsLoading(true); router.push('/expedicao/cadastros/clientes/new')}}
+                    className="transition-transform duration-200 hover:scale-105"
+                 >
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Novo Cliente
+                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                         <Button variant="outline" className="text-black">Exportar <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem>Exportar para PDF</DropdownMenuItem>
+                        <DropdownMenuItem>Exportar para Excel</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="outline" className="text-black"><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                     <DropdownMenuContent>
+                        <DropdownMenuItem><Upload className="mr-2 h-4 w-4" />Importar Clientes</DropdownMenuItem>
+                        <DropdownMenuItem><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>Lista de Clientes</CardTitle>
-                    <CardDescription className="text-card-foreground">Visualize e gerencie os clientes cadastrados.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {/* Mobile View */}
-                    <div className="md:hidden space-y-4">
-                        {loading ? (
-                             [...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
-                        ) : paginatedClients.length > 0 ? (
-                           paginatedClients.map(client => (
-                                <Card key={client.id} className="p-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-semibold truncate">{client.nomeFantasia}</p>
-                                            <p className="text-sm text-muted-foreground truncate">{client.razaoSocial}</p>
-                                            <p className="text-sm text-muted-foreground">{client.cnpj}</p>
-                                        </div>
-                                         {canManageClients && (
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+
+            {/* Filter Area */}
+            <Card className="bg-[#d1d1d1]">
+                <CardContent className="p-4 space-y-4">
+                    <div className="flex items-center gap-4">
+                        <div className="relative flex-grow">
+                             <Input 
+                                placeholder="Pesquisar"
+                                className="pl-4 pr-10 bg-white border-gray-300 text-black"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        </div>
+                        <Button variant="outline" className="text-black">Mais filtros <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                    </div>
+
+                    {/* Stats Tabs */}
+                    <div className="grid grid-cols-3 text-center border-b">
+                        <button onClick={() => setActiveTab('ativo')} className={cn("py-3 relative text-black", activeTab === 'ativo' && "font-semibold")}>
+                            Ativo <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.ativo}</Badge>
+                            {activeTab === 'ativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+                        </button>
+                        <button onClick={() => setActiveTab('inativo')} className={cn("py-3 relative text-black", activeTab === 'inativo' && "font-semibold")}>
+                            Inativo <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.inativo}</Badge>
+                             {activeTab === 'inativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+                        </button>
+                        <button onClick={() => setActiveTab('todos')} className={cn("py-3 relative text-black", activeTab === 'todos' && "font-semibold")}>
+                            Todos <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.todos}</Badge>
+                             {activeTab === 'todos' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+                        </button>
+                    </div>
+
+                    {/* Bulk Actions */}
+                    {selectedClients.length > 0 && (
+                        <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
+                            <span className="text-sm text-black">{selectedClients.length} registro(s) selecionado(s)</span>
+                            <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={handleBulkDelete}>Excluir</Button>
+                            <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={handleBulkInactivate}>Inativar</Button>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Data Table */}
+            <Card className="bg-[#d1d1d1]">
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('razaoSocial')}>Nome {getSortIcon('razaoSocial')}</TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
+                                <TableHead className="text-right text-black">Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                         <TableBody>
+                            {loading ? (
+                                [...Array(5)].map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell>
+                                    </TableRow>
+                                ))
+                            ) : filteredAndSortedClients.length > 0 ? (
+                                filteredAndSortedClients.map(client => (
+                                    <TableRow key={client.id}>
+                                        <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" checked={selectedClients.includes(client.id)} onCheckedChange={(checked) => handleSelectClient(client.id, !!checked)} /></TableCell>
+                                        <TableCell className="font-medium text-black">{client.razaoSocial}</TableCell>
+                                        <TableCell className="text-black">{client.cnpj}</TableCell>
+                                        <TableCell className="text-black">{client.email}</TableCell>
+                                        <TableCell className="text-black">{client.telefone}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className={cn(client.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{client.status}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                             <DropdownMenu>
+                                                <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Ações</DropdownMenuLabel>
                                                     <DropdownMenuItem onClick={() => router.push(`/expedicao/cadastros/clientes/edit/${client.id}`)}>
                                                         <Edit className="mr-2 h-4 w-4" /> Editar
                                                     </DropdownMenuItem>
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
-                                                                <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                                                            </DropdownMenuItem>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-                                                            <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteClient(client.id)}>Excluir</AlertDialogAction></AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
+                                                    <DropdownMenuItem className="text-destructive focus:text-destructive">
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-                                        )}
-                                    </div>
-                                </Card>
-                            ))
-                        ) : (
-                           <div className="text-center py-10 text-muted-foreground">Nenhum cliente encontrado.</div>
-                        )}
-                    </div>
-                    {/* Desktop View */}
-                    <div className="hidden md:block">
-                        <Table>
-                             <TableHeader>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
                                 <TableRow>
-                                    <TableHead className="text-card-foreground">Razão Social</TableHead>
-                                    <TableHead className="text-card-foreground">Nome Fantasia</TableHead>
-                                    <TableHead className="text-card-foreground">CNPJ</TableHead>
-                                    <TableHead className="text-card-foreground">Telefone</TableHead>
-                                    <TableHead className="text-card-foreground">Email</TableHead>
-                                    {canManageClients && <TableHead className="text-right text-card-foreground">Ações</TableHead>}
+                                    <TableCell colSpan={7} className="text-center h-24 text-black">Nenhum cliente encontrado.</TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                     <TableRow><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
-                                ) : paginatedClients.length > 0 ? (
-                                    paginatedClients.map(client => (
-                                        <TableRow key={client.id}>
-                                            <TableCell className="font-medium">{client.razaoSocial}</TableCell>
-                                            <TableCell>{client.nomeFantasia}</TableCell>
-                                            <TableCell>{client.cnpj}</TableCell>
-                                            <TableCell>{client.telefone}</TableCell>
-                                            <TableCell>{client.email}</TableCell>
-                                            {canManageClients && (
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                                            <DropdownMenuItem onClick={() => router.push(`/expedicao/cadastros/clientes/edit/${client.id}`)}>
-                                                                <Edit className="mr-2 h-4 w-4" /> Editar
-                                                            </DropdownMenuItem>
-                                                            <AlertDialog>
-                                                                <AlertDialogTrigger asChild>
-                                                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
-                                                                        <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                                                                    </DropdownMenuItem>
-                                                                </AlertDialogTrigger>
-                                                                <AlertDialogContent>
-                                                                    <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-                                                                    <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteClient(client.id)}>Excluir</AlertDialogAction></AlertDialogFooter>
-                                                                </AlertDialogContent>
-                                                            </AlertDialog>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
-                                            )}
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhum cliente encontrado.</TableCell></TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                     {renderPagination()}
+                            )}
+                        </TableBody>
+                    </Table>
                 </CardContent>
             </Card>
-        </>
+        </div>
     );
 }
-
-    

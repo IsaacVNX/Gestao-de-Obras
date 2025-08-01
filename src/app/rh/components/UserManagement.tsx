@@ -4,7 +4,7 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, UserX, UserCheck, Edit, Search, ChevronLeft, ChevronRight, User as UserIcon, Building, Phone, Calendar, PlusCircle } from 'lucide-react';
+import { MoreHorizontal, UserX, UserCheck, Edit, Search, ChevronLeft, ChevronRight, User as UserIcon, Building, Phone, Calendar, PlusCircle, Printer, ChevronDown, Upload, Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   DropdownMenu,
@@ -208,7 +208,7 @@ export function UserManagement() {
     return (
      <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0" disabled={u.id === user?.id}>
+          <Button variant="link" className="h-8 w-8 p-0 text-black" disabled={u.id === user?.id}>
             <span className="sr-only">Abrir menu</span>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
@@ -253,7 +253,7 @@ export function UserManagement() {
     }
 
     return (
-     <Card>
+     <Card className="bg-[#d1d1d1]">
       {/* Mobile View: List of Cards */}
        <div className="md:hidden">
           <div className="space-y-4 p-4 max-w-md mx-auto">
@@ -269,7 +269,7 @@ export function UserManagement() {
                                       <AvatarFallback>{getInitials(u.nome)}</AvatarFallback>
                                   </Avatar>
                                   <div className="flex-1 min-w-0">
-                                      <p className="font-semibold truncate">{u.nome}</p>
+                                      <p className="font-semibold truncate text-black">{u.nome}</p>
                                       <p className="text-sm text-muted-foreground truncate">{isAdmin ? u.email : getRoleName(u.role)}</p>
                                       {isAdmin ? <Badge variant={getRoleBadgeVariant(u.role)} className="mt-1">{getRoleName(u.role)}</Badge> : null}
                                   </div>
@@ -283,7 +283,7 @@ export function UserManagement() {
                       </Card>
                   ))
               ) : (
-                 <div className="text-center py-10 text-muted-foreground">Nenhum usuário encontrado.</div>
+                 <div className="text-center py-10 text-black">Nenhum usuário encontrado.</div>
               )}
           </div>
       </div>
@@ -292,13 +292,13 @@ export function UserManagement() {
       <div className="hidden md:block overflow-x-auto">
         <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px] text-card-foreground">Foto</TableHead>
-                <TableHead className="text-card-foreground">Nome Completo</TableHead>
-                {isAdmin && <TableHead className="text-card-foreground">Email (Login)</TableHead>}
-                <TableHead>Função</TableHead>
-                {statusFilter === 'todos' && <TableHead className="text-card-foreground">Status</TableHead>}
-                {canTakeAction && <TableHead className="text-right text-card-foreground">Ações</TableHead>}
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[50px] text-black">Foto</TableHead>
+                <TableHead className="text-black">Nome Completo</TableHead>
+                {isAdmin && <TableHead className="text-black">Email (Login)</TableHead>}
+                <TableHead className="text-black">Função</TableHead>
+                {statusFilter === 'todos' && <TableHead className="text-black">Status</TableHead>}
+                {canTakeAction && <TableHead className="text-right text-black">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -311,21 +311,21 @@ export function UserManagement() {
                 </TableRow>
               ) : (
               paginatedUsers.map((u) => (
-                <TableRow key={u.id} onClick={() => setViewingUser(u)} className="cursor-pointer">
+                <TableRow key={u.id} onClick={() => setViewingUser(u)} className="cursor-pointer hover:bg-black/5">
                   <TableCell>
                       <Avatar className="h-8 w-8">
                           <AvatarImage src={u.profileImageUrl || undefined} alt={u.nome} />
                           <AvatarFallback>{getInitials(u.nome)}</AvatarFallback>
                       </Avatar>
                   </TableCell>
-                  <TableCell className="font-medium">{u.nome}</TableCell>
-                  {isAdmin && <TableCell>{u.email}</TableCell>}
-                  <TableCell>
+                  <TableCell className="font-medium text-black">{u.nome}</TableCell>
+                  {isAdmin && <TableCell className="text-black">{u.email}</TableCell>}
+                  <TableCell className="text-black">
                     {getRoleName(u.role)}
                   </TableCell>
                   {statusFilter === 'todos' && (
                     <TableCell>
-                        <Badge variant={u.status === 'ativo' ? 'default' : 'secondary'} className={cn(u.status === 'ativo' ? 'bg-green-600' : 'bg-gray-500', 'text-white')}>
+                        <Badge variant={u.status === 'ativo' ? 'default' : 'secondary'} className={cn(u.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>
                             {u.status === 'ativo' ? 'Ativo' : 'Inativo'}
                         </Badge>
                     </TableCell>
@@ -339,7 +339,7 @@ export function UserManagement() {
               )))}
               {!loading && paginatedUsers.length === 0 && (
                  <TableRow>
-                   <TableCell colSpan={colSpan} className="text-center h-24">Nenhum usuário encontrado.</TableCell>
+                   <TableCell colSpan={colSpan} className="text-center h-24 text-black">Nenhum usuário encontrado.</TableCell>
                  </TableRow>
               )}
             </TableBody>
@@ -351,41 +351,75 @@ export function UserManagement() {
 
   return (
     <>
-        <div className="flex items-center justify-between mb-4">
-            <div className="relative w-full md:max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black" />
-                <Input 
-                    placeholder={isAdmin ? "Pesquisar por nome, email ou função..." : "Pesquisar por nome ou função..."}
-                    className="pl-10 bg-gray-200 border-black text-black"
-                    value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                />
-            </div>
-             {canCreateUser && (
+      <div className="space-y-4">
+        {/* Header Actions */}
+        <div className="flex items-center gap-2">
+            {canCreateUser && (
                 <Button 
-                    onClick={() => { setIsLoading(true); router.push('/expedicao/cadastros/usuarios/new')}}
+                    onClick={() => { setIsLoading(true); router.push('/rh/cadastros/usuarios/new')}}
                     className="transition-transform duration-200 hover:scale-105"
                 >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Novo Usuário
-                </Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Novo Usuário
+            </Button>
             )}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                     <Button variant="outline" className="text-black">Exportar <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuItem>Exportar para PDF</DropdownMenuItem>
+                    <DropdownMenuItem>Exportar para Excel</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" className="text-black"><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                </DropdownMenuTrigger>
+                 <DropdownMenuContent>
+                    <DropdownMenuItem><Upload className="mr-2 h-4 w-4" />Importar Usuários</DropdownMenuItem>
+                    <DropdownMenuItem><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
+
+        {/* Filter Area */}
+        <Card className="bg-[#d1d1d1]">
+            <CardContent className="p-4 space-y-4">
+                <div className="flex items-center gap-4">
+                    <div className="relative flex-grow">
+                         <Input 
+                            placeholder={isAdmin ? "Pesquisar por nome, email ou função..." : "Pesquisar por nome ou função..."}
+                            className="pl-10 bg-white border-gray-300 text-black"
+                            value={searchTerm}
+                            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                        />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    </div>
+                    <Button variant="outline" className="text-black">Mais filtros <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                </div>
+
+                <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 bg-transparent p-0">
+                        <TabsTrigger value="ativo" className={cn("py-3 relative text-black border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:shadow-none data-[state=active]:bg-transparent rounded-none", "flex gap-2")}>
+                          Ativos 
+                          <Badge variant={activeTab === 'ativo' ? 'secondary' : 'default'} className="px-2 bg-gray-200 text-black">{userCounts.ativos}</Badge>
+                        </TabsTrigger>
+                        <TabsTrigger value="inativo" className={cn("py-3 relative text-black border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:shadow-none data-[state=active]:bg-transparent rounded-none", "flex gap-2")}>
+                          Inativos 
+                          <Badge variant={activeTab === 'inativo' ? 'secondary' : 'default'} className="px-2 bg-gray-200 text-black">{userCounts.inativos}</Badge>
+                        </TabsTrigger>
+                        <TabsTrigger value="todos" className={cn("py-3 relative text-black border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:shadow-none data-[state=active]:bg-transparent rounded-none", "flex gap-2")}>
+                          Todos
+                          <Badge variant={activeTab === 'todos' ? 'secondary' : 'default'} className="px-2 bg-gray-200 text-black">{userCounts.todos}</Badge>
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            </CardContent>
+        </Card>
+      
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="grid w-full grid-cols-3 bg-tab-background">
-                <TabsTrigger value="ativo" className={cn("data-[state=active]:bg-primary data-[state=active]:text-primary-foreground", "flex gap-2")}>
-                  Ativos 
-                  <Badge variant={activeTab === 'ativo' ? 'secondary' : 'default'} className="px-2">{userCounts.ativos}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="inativo" className={cn("data-[state=active]:bg-primary data-[state=active]:text-primary-foreground", "flex gap-2")}>
-                  Inativos 
-                  <Badge variant={activeTab === 'inativo' ? 'secondary' : 'default'} className="px-2">{userCounts.inativos}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="todos" className={cn("data-[state=active]:bg-primary data-[state=active]:text-primary-foreground", "flex gap-2")}>
-                  Todos
-                  <Badge variant={activeTab === 'todos' ? 'secondary' : 'default'} className="px-2">{userCounts.todos}</Badge>
-                </TabsTrigger>
-            </TabsList>
             <TabsContent value="ativo" className="mt-4">
                 {renderContent('ativo')}
             </TabsContent>
@@ -396,6 +430,7 @@ export function UserManagement() {
                 {renderContent('todos')}
             </TabsContent>
         </Tabs>
+      </div>
       
       {/* Edit Role Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && handleCloseEditDialog()}>
@@ -489,5 +524,3 @@ export function UserManagement() {
     </>
   );
 }
-
-    

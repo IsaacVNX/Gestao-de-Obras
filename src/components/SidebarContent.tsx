@@ -95,32 +95,35 @@ export default function SidebarContent({
     // Primary Sidebar (Icon Bar)
     if (isPrimary && !isMobile) {
         return (
-            <nav className="flex flex-col items-stretch flex-1 space-y-2 p-2 mt-2">
+            <nav className={cn(
+                "flex flex-col items-stretch flex-1 space-y-2 mt-2",
+                !isCollapsed && "p-2 pr-0"
+            )}>
             {navLinks.filter(link => user && link.roles.includes(user.role)).map(link => {
-                    const isLinkActive = activeMenuKey ? activeMenuKey === link.key : (link.href && currentMainCategory === link.key);
-                    const showActiveState = isLinkActive && isCollapsed && link.key !== 'dashboard';
+                    const isLinkActive = activeMenuKey ? activeMenuKey === link.key : (link.href && pathname.startsWith(link.href));
+                    
+                    const buttonClasses = cn(
+                        "w-full h-10 flex items-center transition-colors text-sidebar-foreground rounded-r-none",
+                         isLinkActive
+                            ? "bg-sidebar-active text-sidebar-active-foreground rounded-l-md"
+                            : "hover:bg-sidebar-hover-background hover:text-sidebar-foreground rounded-l-md"
+                    );
 
-
-                    const buttonContent = (
-                        <>
-                            <link.icon className="h-5 w-5 shrink-0" />
-                            {!isCollapsed && <span className="ml-3 truncate">{link.label}</span>}
-                        </>
+                    const contentWrapperClasses = cn(
+                        "flex items-center w-full h-full",
+                        isCollapsed ? "justify-center" : "pl-3",
                     );
 
                     return (
                         <button
                             key={link.key}
                             onClick={() => handleNavClick(link.key, link.href, link.subItems)}
-                            className={cn(
-                                "w-full h-10 flex items-center rounded-md transition-colors",
-                                "text-sidebar-foreground",
-                                "hover:bg-sidebar-hover-background hover:text-sidebar-active-foreground",
-                                isCollapsed ? "justify-center" : "px-3 justify-start",
-                                showActiveState && "bg-sidebar-active text-sidebar-active-foreground"
-                            )}
+                            className={buttonClasses}
                         >
-                            {buttonContent}
+                           <div className={contentWrapperClasses}>
+                                <link.icon className="h-5 w-5 shrink-0" />
+                                {!isCollapsed && <span className="ml-3 truncate">{link.label}</span>}
+                            </div>
                         </button>
                     );
                 })}
@@ -133,8 +136,8 @@ export default function SidebarContent({
         const activeMenu = navLinks.find(link => link.key === activeMenuKey);
         if (!activeMenu || !activeMenu.subItems) return null;
         return (
-            <div className="flex flex-col h-full w-full bg-sidebar-muted text-sidebar-muted-foreground p-2">
-                 <div className="flex items-center h-14 px-1 mb-2">
+            <div className="flex flex-col h-full w-full bg-sidebar-muted text-sidebar-muted-foreground">
+                 <div className="flex items-center h-14 px-3 mb-2">
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -156,24 +159,16 @@ export default function SidebarContent({
                          }
                          if (item.type === 'collapsible') {
                              const isAnySubItemActive = item.subItems.some(sub => pathname.startsWith(sub.href));
-                             // Special handling for 'registros' to be fixed open and without chevron
-                             const isRegistros = item.key === 'registros';
                              
                              return (
-                                <Collapsible key={item.key} defaultOpen={isAnySubItemActive || isRegistros} className="w-full">
-                                    {isRegistros ? (
-                                        <div className="px-3 pt-4 pb-1 text-sm font-semibold text-sidebar-foreground">
-                                            {item.label}
+                                <Collapsible key={item.key} defaultOpen={isAnySubItemActive} className="w-full">
+                                    <CollapsibleTrigger asChild>
+                                        <div className="group w-full flex items-center justify-between h-9 px-3 rounded-md text-sm font-semibold text-sidebar-muted-foreground cursor-pointer">
+                                            <span>{item.label}</span>
+                                            <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
                                         </div>
-                                    ) : (
-                                        <CollapsibleTrigger asChild>
-                                            <div className="group w-full flex items-center justify-between h-9 px-3 rounded-md text-sm font-semibold text-sidebar-muted-foreground cursor-pointer">
-                                                <span>{item.label}</span>
-                                                <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                                            </div>
-                                        </CollapsibleTrigger>
-                                    )}
-                                    <CollapsibleContent className="space-y-1 mt-1">
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="space-y-1 mt-1 pl-4 group">
                                         {item.subItems.map(subItem => {
                                             const isSubActive = pathname.startsWith(subItem.href);
                                             return (
@@ -182,10 +177,10 @@ export default function SidebarContent({
                                                   href={subItem.href}
                                                   onClick={(e) => { e.preventDefault(); handleSubNavClick(subItem.href); }}
                                                   className={cn(
-                                                    "flex items-center h-9 px-3 rounded-md mx-2 gap-3 text-sm transition-colors",
+                                                    "flex items-center h-9 gap-3 text-sm transition-colors pr-3 pl-4 group-data-[state=open]:animate-slide-in-from-left",
                                                     isSubActive
-                                                      ? "bg-sidebar-muted-active-background text-sidebar-muted-active-foreground font-semibold"
-                                                      : "text-sidebar-muted-foreground hover:bg-sidebar-muted-hover-background hover:text-sidebar-muted-hover-foreground"
+                                                      ? "bg-sidebar-muted-active-background text-sidebar-muted-active-foreground font-semibold rounded-l-md"
+                                                      : "text-sidebar-muted-foreground hover:bg-sidebar-muted-hover-background hover:text-sidebar-muted-hover-foreground hover:rounded-l-md"
                                                   )}
                                                 >
                                                     <subItem.icon className="h-4 w-4" />
@@ -204,8 +199,11 @@ export default function SidebarContent({
                                 key={subItem.key}
                                 href={subItem.href}
                                 onClick={(e) => { e.preventDefault(); handleSubNavClick(subItem.href); }}
-                                className={cn( "flex items-center h-9 px-3 rounded-md gap-3 text-sm transition-colors",
-                                    isSubActive ? "bg-sidebar-muted-active-background text-sidebar-muted-active-foreground font-semibold" : "text-sidebar-muted-foreground hover:bg-sidebar-muted-hover-background hover:text-sidebar-muted-hover-foreground"
+                                className={cn(
+                                    "flex items-center h-9 gap-3 text-sm transition-colors pl-4 pr-3 group-data-[state=open]:animate-slide-in-from-left",
+                                    isSubActive
+                                        ? "bg-sidebar-muted-active-background text-sidebar-muted-active-foreground font-semibold rounded-l-md"
+                                        : "text-sidebar-muted-foreground hover:bg-sidebar-muted-hover-background hover:text-sidebar-muted-hover-foreground hover:rounded-l-md"
                                 )}>
                                 <subItem.icon className="h-4 w-4" /> <span>{subItem.label}</span>
                              </a>
@@ -253,7 +251,7 @@ export default function SidebarContent({
                                     </div>
                                     <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
                                 </CollapsibleTrigger>
-                                <CollapsibleContent className="space-y-1 mt-1">
+                                <CollapsibleContent className="space-y-1 mt-1 group data-[state=open]:animate-slide-in-from-left">
                                     {link.subItems.map(item => {
                                         if (item.type === 'label') {
                                             return (
@@ -269,12 +267,12 @@ export default function SidebarContent({
                                                         <span className="pl-6">{item.label}</span>
                                                         <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
                                                     </CollapsibleTrigger>
-                                                    <CollapsibleContent className="space-y-1 mt-1">
+                                                    <CollapsibleContent className="space-y-1 mt-1 group data-[state=open]:animate-slide-in-from-left">
                                                         {item.subItems.map(sub => {
                                                             const isSubActive = pathname.startsWith(sub.href);
                                                             return (
                                                                 <a key={sub.key} href={sub.href} onClick={(e) => { e.preventDefault(); handleSubNavClick(sub.href); }}
-                                                                    className={cn("flex items-center h-9 pl-12 pr-3 rounded-md gap-3 text-sm", isSubActive ? "bg-sidebar-active text-sidebar-active-foreground font-semibold" : "hover:bg-sidebar-hover-background")}
+                                                                    className={cn("flex items-center h-9 pl-12 pr-3 rounded-md gap-3 text-sm group-data-[state=open]:animate-slide-in-from-left", isSubActive ? "bg-sidebar-active text-sidebar-active-foreground font-semibold" : "hover:bg-sidebar-hover-background")}
                                                                 >
                                                                     <span>{sub.label}</span>
                                                                 </a>
@@ -288,7 +286,7 @@ export default function SidebarContent({
                                         const isSubActive = subItem.href && pathname.startsWith(subItem.href);
                                         return (
                                              <a key={subItem.key} href={subItem.href} onClick={(e) => { e.preventDefault(); handleSubNavClick(subItem.href); }}
-                                                className={cn("flex items-center h-9 pl-8 pr-3 rounded-md gap-3 text-sm", isSubActive ? "bg-sidebar-active text-sidebar-active-foreground font-semibold" : "hover:bg-sidebar-hover-background")}
+                                                className={cn("flex items-center h-9 pl-8 pr-3 rounded-md gap-3 text-sm group-data-[state=open]:animate-slide-in-from-left", isSubActive ? "bg-sidebar-active text-sidebar-active-foreground font-semibold" : "hover:bg-sidebar-hover-background")}
                                              >
                                                 <span>{subItem.label}</span>
                                              </a>
