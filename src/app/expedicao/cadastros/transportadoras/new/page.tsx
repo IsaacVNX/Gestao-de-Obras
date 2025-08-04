@@ -17,12 +17,14 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IMaskInput } from 'react-imask';
 import React from 'react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 
-const clientSchema = z.object({
-    razaoSocial: z.string().min(1, "A razão social é obrigatória."),
-    nomeFantasia: z.string().min(1, "O nome fantasia é obrigatório."),
-    cnpj: z.string().min(1, "O CNPJ é obrigatório.").refine(val => val.replace(/\D/g, '').length === 14, "CNPJ deve ter 14 dígitos."),
+const personTypeSchema = z.object({
+  tipoPessoa: z.enum(['juridica', 'fisica']),
+});
+
+const baseSchema = z.object({
     inscricaoEstadual: z.string().optional(),
     email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
     telefone: z.string().min(1, "O telefone é obrigatório.").refine(val => {
@@ -44,6 +46,25 @@ const clientSchema = z.object({
     responsavelEmail: z.string().email("E-mail do responsável inválido.").optional().or(z.literal('')),
     responsavelTelefone: z.string().optional(),
 });
+
+const carrierSchema = z.discriminatedUnion("tipoPessoa", [
+    z.object({
+        tipoPessoa: z.literal('juridica'),
+        razaoSocial: z.string().min(1, "A razão social é obrigatória."),
+        nomeFantasia: z.string().min(1, "O nome fantasia é obrigatório."),
+        cnpj: z.string().min(1, "O CNPJ é obrigatório.").refine(val => val.replace(/\D/g, '').length === 14, "CNPJ deve ter 14 dígitos."),
+        cpf: z.string().optional(),
+        nomeCompleto: z.string().optional(),
+    }).merge(baseSchema),
+    z.object({
+        tipoPessoa: z.literal('fisica'),
+        nomeCompleto: z.string().min(1, "O nome completo é obrigatório."),
+        cpf: z.string().min(1, "O CPF é obrigatório.").refine(val => val.replace(/\D/g, '').length === 11, "CPF deve ter 11 dígitos."),
+        razaoSocial: z.string().optional(),
+        nomeFantasia: z.string().optional(),
+        cnpj: z.string().optional(),
+    }).merge(baseSchema),
+]);
 
 
 const FormSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
@@ -69,18 +90,21 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 MaskedInput.displayName = "MaskedInput";
 
 
-export default function NewClientPage() {
+export default function NewCarrierPage() {
     const { user } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
 
-    const form = useForm<z.infer<typeof clientSchema>>({
-        resolver: zodResolver(clientSchema),
+    const form = useForm<z.infer<typeof carrierSchema>>({
+        resolver: zodResolver(carrierSchema),
         defaultValues: {
+            tipoPessoa: 'juridica',
             razaoSocial: '',
             nomeFantasia: '',
             cnpj: '',
+            nomeCompleto: '',
+            cpf: '',
             inscricaoEstadual: '',
             email: '',
             telefone: '',
@@ -97,35 +121,41 @@ export default function NewClientPage() {
         },
     });
 
-    const handleCreateClient = async (formData: z.infer<typeof clientSchema>) => {
+    const tipoPessoa = form.watch('tipoPessoa');
+
+    const handleCreate = async (formData: z.infer<typeof carrierSchema>) => {
         setSaving(true);
-        const cnpjDigits = formData.cnpj.replace(/\D/g, '');
+        const identifier = (formData.tipoPessoa === 'juridica' ? formData.cnpj : formData.cpf)?.replace(/\D/g, '') || '';
         
+        if (!identifier) {
+             toast({ variant: 'destructive', title: 'Erro de Criação', description: 'CNPJ ou CPF deve ser preenchido.' });
+             setSaving(false);
+             return;
+        }
+
         try {
-            // Check if CNPJ already exists
-            const cnpjQuery = query(collection(db, 'clientes'), where('cnpj', '==', cnpjDigits));
-            const cnpjQuerySnapshot = await getDocs(cnpjQuery);
-            if (!cnpjQuerySnapshot.empty) {
-                toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Este CNPJ já está cadastrado.' });
+            const fieldToCheck = formData.tipoPessoa === 'juridica' ? 'cnpj' : 'cpf';
+            const q = query(collection(db, 'transportadoras'), where(fieldToCheck, '==', identifier));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                toast({ variant: 'destructive', title: 'Erro de Criação', description: `Este ${fieldToCheck.toUpperCase()} já está cadastrado.` });
                 setSaving(false);
                 return;
             }
 
-            // The document ID will be the CNPJ itself for easy lookup
-            const clientDocRef = doc(db, 'clientes', cnpjDigits);
-            await setDoc(clientDocRef, {
+            const docRef = doc(db, 'transportadoras', identifier);
+            await setDoc(docRef, {
                 ...formData,
-                cnpj: cnpjDigits,
-                responsavel: formData.responsavel || '',
-                responsavelEmail: formData.responsavelEmail || '',
-                responsavelTelefone: formData.responsavelTelefone || '',
+                cnpj: formData.cnpj?.replace(/\D/g, '') || '',
+                cpf: formData.cpf?.replace(/\D/g, '') || '',
+                status: 'ativo',
             });
             
-            toast({ title: 'Cliente Criado!', description: 'O novo cliente foi adicionado com sucesso.' });
-            router.push('/expedicao?tab=clients');
+            toast({ title: 'Transportadora Criada!', description: 'A nova transportadora foi adicionada com sucesso.' });
+            router.push('/expedicao/cadastros/transportadoras');
 
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar a transportadora.' });
         } finally {
             setSaving(false);
         }
@@ -137,7 +167,7 @@ export default function NewClientPage() {
                 <Card className="max-w-2xl mx-auto">
                     <CardHeader>
                         <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para criar novos clientes.</CardDescription>
+                        <CardDescription>Você não tem permissão para criar novas transportadoras.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Button onClick={() => router.back()}>Voltar</Button>
@@ -151,29 +181,71 @@ export default function NewClientPage() {
         <AppLayout>
             <Card className="max-w-4xl mx-auto">
                 <CardHeader>
-                    <CardTitle className="text-2xl">Adicionar Novo Cliente</CardTitle>
-                    <CardDescription className="text-card-foreground">Preencha os detalhes abaixo para criar um novo cliente.</CardDescription>
+                    <CardTitle className="text-2xl">Adicionar Nova Transportadora</CardTitle>
+                    <CardDescription className="text-card-foreground">Preencha os detalhes abaixo.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreateClient)}>
+                    <form onSubmit={form.handleSubmit(handleCreate)}>
+                        <FormField
+                            control={form.control}
+                            name="tipoPessoa"
+                            render={({ field }) => (
+                                <FormItem className="mb-6">
+                                    <FormLabel>Tipo de Pessoa</FormLabel>
+                                    <FormControl>
+                                        <RadioGroup
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}
+                                            className="grid grid-cols-2 gap-4"
+                                            disabled={saving}
+                                        >
+                                            <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-4 transition-colors", field.value === 'juridica' && 'bg-accent text-accent-foreground')}>
+                                                <FormControl><RadioGroupItem value="juridica" id="juridica" className={cn(field.value === 'juridica' && 'border-white text-white')}/></FormControl>
+                                                <FormLabel htmlFor="juridica" className="cursor-pointer font-bold text-base">Pessoa Jurídica</FormLabel>
+                                            </FormItem>
+                                            <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-4 transition-colors", field.value === 'fisica' && 'bg-accent text-accent-foreground')}>
+                                                <FormControl><RadioGroupItem value="fisica" id="fisica" className={cn(field.value === 'fisica' && 'border-white text-white')}/></FormControl>
+                                                <FormLabel htmlFor="fisica" className="cursor-pointer font-bold text-base">Pessoa Física</FormLabel>
+                                            </FormItem>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
                          <FormSection title="Dados da Empresa">
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <FormField control={form.control} name="razaoSocial" render={({ field }) => (
-                                    <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="nomeFantasia" render={({ field }) => (
-                                    <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                    <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
-                                    <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                             </div>
+                             {tipoPessoa === 'juridica' ? (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FormField control={form.control} name="razaoSocial" render={({ field }) => (
+                                            <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        )}/>
+                                        <FormField control={form.control} name="nomeFantasia" render={({ field }) => (
+                                            <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        )}/>
+                                     </div>
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                        <FormField control={form.control} name="cnpj" render={({ field }) => (
+                                            <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        )}/>
+                                        <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
+                                            <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        )}/>
+                                     </div>
+                                </>
+                             ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField control={form.control} name="nomeCompleto" render={({ field }) => (
+                                        <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                    <FormField control={form.control} name="cpf" render={({ field }) => (
+                                        <FormItem><FormLabel>CPF</FormLabel><FormControl><MaskedInput {...field} mask="000.000.000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                </div>
+                             )}
+
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="email" render={({ field }) => (
                                     <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
@@ -229,11 +301,11 @@ export default function NewClientPage() {
                         </FormSection>
 
                         <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao?tab=clients')} disabled={saving}>
+                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/transportadoras')} disabled={saving}>
                                 Cancelar
                             </Button>
                             <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                                {saving ? 'Salvando Cliente...' : 'Salvar Cliente'}
+                                {saving ? 'Salvando...' : 'Salvar Transportadora'}
                             </Button>
                         </div>
                     </form>

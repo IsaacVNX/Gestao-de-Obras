@@ -90,8 +90,8 @@ input:-webkit-autofill:active {
     --secondary-foreground: 215.4 16.3% 46.9%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 14 83% 50%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 208 39% 59%; /* Cor #709abf */
+    --accent-foreground: 0 0% 98%; /* Texto branco para contraste */
     --destructive: 0 84.2% 50.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
@@ -114,9 +114,9 @@ input:-webkit-autofill:active {
     --sidebar-muted: 240 100% 25%;
     --sidebar-muted-foreground: 0 0% 98%;
     --sidebar-muted-active-background: 0 0% 100%;
-    --sidebar-muted-active-foreground: 212 100% 50%;
-    --sidebar-muted-hover-background: 0 0% 100%;
-    --sidebar-muted-hover-foreground: 212 100% 50%;
+    --sidebar-muted-active-foreground: 240 100% 25%;
+    --sidebar-muted-hover-background: 240 100% 13%;
+    --sidebar-muted-hover-foreground: 0 0% 98%;
   }
 }
 

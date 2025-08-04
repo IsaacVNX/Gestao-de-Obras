@@ -19,11 +19,12 @@ import { IMaskInput } from 'react-imask';
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { cn } from '@/lib/utils';
 
 
-const baseSchema = z.object({
+const supplierSchema = z.object({
+    razaoSocial: z.string().min(1, "A razão social é obrigatória."),
+    nomeFantasia: z.string().min(1, "O nome fantasia é obrigatório."),
+    cnpj: z.string().min(1, "O CNPJ é obrigatório.").refine(val => val.replace(/\D/g, '').length === 14, "CNPJ deve ter 14 dígitos."),
     inscricaoEstadual: z.string().optional(),
     email: z.string().email("E-mail inválido.").optional().or(z.literal('')),
     telefone: z.string().min(1, "O telefone é obrigatório.").refine(val => {
@@ -46,25 +47,6 @@ const baseSchema = z.object({
     responsavelEmail: z.string().email("E-mail do responsável inválido.").optional().or(z.literal('')),
     responsavelTelefone: z.string().optional(),
 });
-
-const clientSchema = z.discriminatedUnion("tipoPessoa", [
-    z.object({
-        tipoPessoa: z.literal('juridica'),
-        razaoSocial: z.string().min(1, "A razão social é obrigatória."),
-        nomeFantasia: z.string().min(1, "O nome fantasia é obrigatório."),
-        cnpj: z.string().min(1, "O CNPJ é obrigatório.").refine(val => val.replace(/\D/g, '').length === 14, "CNPJ deve ter 14 dígitos."),
-        cpf: z.string().optional(),
-        nomeCompleto: z.string().optional(),
-    }).merge(baseSchema),
-    z.object({
-        tipoPessoa: z.literal('fisica'),
-        nomeCompleto: z.string().min(1, "O nome completo é obrigatório."),
-        cpf: z.string().min(1, "O CPF é obrigatório.").refine(val => val.replace(/\D/g, '').length === 11, "CPF deve ter 11 dígitos."),
-        razaoSocial: z.string().optional(),
-        nomeFantasia: z.string().optional(),
-        cnpj: z.string().optional(),
-    }).merge(baseSchema),
-]);
 
 
 const FormSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
@@ -90,73 +72,72 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 MaskedInput.displayName = "MaskedInput";
 
 
-export default function EditClientPage() {
+export default function EditSupplierPage() {
     const { user } = useAuth();
     const router = useRouter();
     const params = useParams();
-    const clientId = params.id as string;
+    const supplierId = params.id as string;
     const { toast } = useToast();
     
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    const form = useForm<z.infer<typeof clientSchema>>({
-        resolver: zodResolver(clientSchema),
-        defaultValues: { tipoPessoa: 'juridica' },
+    const form = useForm<z.infer<typeof supplierSchema>>({
+        resolver: zodResolver(supplierSchema),
+        defaultValues: {},
     });
-    
-    const tipoPessoa = form.watch('tipoPessoa');
 
      useEffect(() => {
-        if (!clientId) return;
+        if (!supplierId) return;
         
-        async function fetchClientData() {
+        async function fetchSupplierData() {
             setLoading(true);
             try {
-                const clientDocRef = doc(db, 'clientes', clientId);
-                const docSnap = await getDoc(clientDocRef);
+                const docRef = doc(db, 'fornecedores', supplierId);
+                const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    const clientData = docSnap.data() as z.infer<typeof clientSchema>;
-                    form.reset({
-                        ...clientData,
-                        tipoPessoa: clientData.tipoPessoa || 'juridica',
+                    const data = docSnap.data();
+                    Object.entries(data).forEach(([key, value]) => {
+                        form.setValue(key as keyof z.infer<typeof supplierSchema>, value);
                     });
+                     if (!data.status) {
+                        form.setValue('status', 'ativo');
+                    }
                 } else {
-                    toast({ variant: 'destructive', title: 'Erro', description: 'Cliente não encontrado.' });
-                    router.push('/expedicao/cadastros/clientes');
+                    toast({ variant: 'destructive', title: 'Erro', description: 'Fornecedor não encontrado.' });
+                    router.push('/expedicao/cadastros/fornecedores');
                 }
             } catch (error) {
-                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados do cliente.' });
+                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados.' });
             } finally {
                 setLoading(false);
             }
         }
         
-        fetchClientData();
-    }, [clientId, form, toast, router]);
+        fetchSupplierData();
+    }, [supplierId, form, toast, router]);
 
 
-    const handleUpdateClient = async (formData: z.infer<typeof clientSchema>) => {
+    const handleUpdate = async (formData: z.infer<typeof supplierSchema>) => {
         setSaving(true);
         try {
             const dataToUpdate = {
                 ...formData,
-                cnpj: formData.cnpj?.replace(/\D/g, '') || '',
-                cpf: formData.cpf?.replace(/\D/g, '') || '',
+                cnpj: formData.cnpj.replace(/\D/g, ''),
                 responsavel: formData.responsavel || '',
                 responsavelEmail: formData.responsavelEmail || '',
                 responsavelTelefone: formData.responsavelTelefone || '',
             };
 
-            const clientDocRef = doc(db, 'clientes', clientId);
-            await updateDoc(clientDocRef, dataToUpdate);
+            const docRef = doc(db, 'fornecedores', supplierId);
+            await updateDoc(docRef, dataToUpdate);
             
-            toast({ title: 'Cliente Atualizado!', description: 'Os dados do cliente foram atualizados com sucesso.' });
-            router.push('/expedicao/cadastros/clientes');
+            toast({ title: 'Fornecedor Atualizado!', description: 'Os dados foram atualizados com sucesso.' });
+            router.push('/expedicao/cadastros/fornecedores');
 
         } catch (error: any) {
             console.error("Update error: ", error);
-            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar os dados.' });
         } finally {
             setSaving(false);
         }
@@ -178,13 +159,13 @@ export default function EditClientPage() {
         )
     }
 
-    if (!user || (user.role !== 'admin' && user.role !== 'gestor' && user.role !== 'escritorio')) {
+    if (!user || (user.role !== 'admin' && user.role !== 'gestor')) {
         return (
             <AppLayout>
                 <Card className="max-w-2xl mx-auto">
                     <CardHeader>
                         <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para editar clientes.</CardDescription>
+                        <CardDescription>Você não tem permissão para editar fornecedores.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Button onClick={() => router.back()}>Voltar</Button>
@@ -198,78 +179,29 @@ export default function EditClientPage() {
         <AppLayout>
             <Card className="max-w-4xl mx-auto">
                 <CardHeader>
-                    <CardTitle className="text-2xl">Editar Cliente</CardTitle>
-                    <CardDescription className="text-card-foreground">Modifique os detalhes do cliente abaixo.</CardDescription>
+                    <CardTitle className="text-2xl">Editar Fornecedor</CardTitle>
+                    <CardDescription className="text-card-foreground">Modifique os detalhes abaixo.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleUpdateClient)}>
-                        <FormField
-                            control={form.control}
-                            name="tipoPessoa"
-                            render={({ field }) => (
-                                <FormItem className="mb-6">
-                                    <FormLabel>Tipo de Pessoa</FormLabel>
-                                    <FormControl>
-                                        <RadioGroup
-                                            onValueChange={(value) => {
-                                                field.onChange(value);
-                                                form.setValue('cnpj', '');
-                                                form.setValue('cpf', '');
-                                                form.setValue('razaoSocial', '');
-                                                form.setValue('nomeFantasia', '');
-                                                form.setValue('nomeCompleto', '');
-                                            }}
-                                            defaultValue={field.value}
-                                            className="grid grid-cols-2 gap-4"
-                                            disabled={saving}
-                                        >
-                                            <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-4 transition-colors", field.value === 'juridica' && 'bg-accent text-accent-foreground')}>
-                                                <FormControl><RadioGroupItem value="juridica" id="juridica" className={cn(field.value === 'juridica' && 'border-white text-white')} /></FormControl>
-                                                <FormLabel htmlFor="juridica" className="cursor-pointer font-bold text-base">Pessoa Jurídica</FormLabel>
-                                            </FormItem>
-                                            <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-4 transition-colors", field.value === 'fisica' && 'bg-accent text-accent-foreground')}>
-                                                <FormControl><RadioGroupItem value="fisica" id="fisica" className={cn(field.value === 'fisica' && 'border-white text-white')} /></FormControl>
-                                                <FormLabel htmlFor="fisica" className="cursor-pointer font-bold text-base">Pessoa Física</FormLabel>
-                                            </FormItem>
-                                        </RadioGroup>
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
+                    <form onSubmit={form.handleSubmit(handleUpdate)}>
                          <FormSection title="Dados da Empresa">
-                             {tipoPessoa === 'juridica' ? (
-                                <>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <FormField control={form.control} name="razaoSocial" render={({ field }) => (
-                                            <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="nomeFantasia" render={({ field }) => (
-                                            <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                        )}/>
-                                     </div>
-                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                        <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                            <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
-                                            <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                        )}/>
-                                     </div>
-                                </>
-                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="nomeCompleto" render={({ field }) => (
-                                        <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                    )}/>
-                                    <FormField control={form.control} name="cpf" render={({ field }) => (
-                                        <FormItem><FormLabel>CPF</FormLabel><FormControl><MaskedInput {...field} mask="000.000.000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
-                                    )}/>
-                                </div>
-                             )}
-
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField control={form.control} name="razaoSocial" render={({ field }) => (
+                                    <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="nomeFantasia" render={({ field }) => (
+                                    <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                             </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <FormField control={form.control} name="cnpj" render={({ field }) => (
+                                    <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
+                                    <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                             </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="email" render={({ field }) => (
                                     <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
@@ -281,7 +213,7 @@ export default function EditClientPage() {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="status" render={({ field }) => (
                                     <FormItem><FormLabel>Status</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={saving}>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={saving}>
                                             <FormControl>
                                                 <SelectTrigger className="text-black"><SelectValue placeholder="Selecione um status" /></SelectTrigger>
                                             </FormControl>
@@ -340,7 +272,7 @@ export default function EditClientPage() {
                         </FormSection>
 
                         <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/clientes')} disabled={saving}>
+                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/fornecedores')} disabled={saving}>
                                 Cancelar
                             </Button>
                             <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>

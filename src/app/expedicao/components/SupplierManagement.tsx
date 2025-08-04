@@ -47,153 +47,131 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
-export type Cliente = {
+export type Fornecedor = {
     id: string;
-    tipoPessoa: 'juridica' | 'fisica';
-    razaoSocial?: string;
-    nomeFantasia?: string;
-    nomeCompleto?: string;
-    cnpj?: string;
-    cpf?: string;
+    razaoSocial: string;
+    nomeFantasia: string;
+    cnpj: string;
     telefone: string;
     email: string;
     status: 'ativo' | 'inativo';
 };
 
 type SortConfig = {
-    key: keyof Cliente | 'nome' | 'documento';
+    key: keyof Fornecedor;
     direction: 'ascending' | 'descending';
 };
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 30, 50, 100];
 
-export function ClientManagement() {
+export function SupplierManagement() {
     const { user } = useAuth();
     const router = useRouter();
     const { setIsLoading } = useLoading();
     const { toast } = useToast();
     
-    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'ativo' | 'inativo' | 'todos'>('ativo');
-    const [selectedClients, setSelectedClients] = useState<string[]>([]);
-    const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'nome', direction: 'ascending' });
+    const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'razaoSocial', direction: 'ascending' });
     const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
     
-    const canManageClients = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
+    const canManage = user?.role === 'admin' || user?.role === 'gestor';
 
     useEffect(() => {
-        async function fetchClients() {
+        async function fetchSuppliers() {
             setLoading(true);
             try {
-                const clientsSnapshot = await getDocs(collection(db, 'clientes'));
-                const clientsList = clientsSnapshot.docs.map(doc => {
+                const suppliersSnapshot = await getDocs(collection(db, 'fornecedores'));
+                const suppliersList = suppliersSnapshot.docs.map(doc => {
                     const data = doc.data();
                     return { 
                         id: doc.id, 
                         status: data.status || 'ativo',
-                        tipoPessoa: data.tipoPessoa || 'juridica',
                         ...data 
-                    } as Cliente;
+                    } as Fornecedor;
                 });
-                setClientes(clientsList);
+                setFornecedores(suppliersList);
             } catch (error) {
-                console.error("Erro ao buscar clientes:", error);
-                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os clientes.' });
+                console.error("Erro ao buscar fornecedores:", error);
+                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os fornecedores.' });
             } finally {
                 setLoading(false);
             }
         }
-        fetchClients();
+        fetchSuppliers();
     }, [toast]);
     
-    const handleDeleteClient = async (clientId: string) => {
+    const handleDelete = async (supplierId: string) => {
         try {
-            await deleteDoc(doc(db, 'clientes', clientId));
-            setClientes(prev => prev.filter(c => c.id !== clientId));
-            setSelectedClients(prev => prev.filter(id => id !== clientId));
-            toast({ title: 'Cliente Excluído', description: 'O cliente foi removido com sucesso.' });
+            await deleteDoc(doc(db, 'fornecedores', supplierId));
+            setFornecedores(prev => prev.filter(s => s.id !== supplierId));
+            setSelectedSuppliers(prev => prev.filter(id => id !== supplierId));
+            toast({ title: 'Fornecedor Excluído', description: 'O fornecedor foi removido com sucesso.' });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o fornecedor.' });
         }
     };
     
-    const handleToggleStatus = async (clientIds: string[], newStatus: 'ativo' | 'inativo') => {
+    const handleToggleStatus = async (supplierIds: string[], newStatus: 'ativo' | 'inativo') => {
         const batch = writeBatch(db);
-        clientIds.forEach(id => {
-            const clientRef = doc(db, 'clientes', id);
-            batch.update(clientRef, { status: newStatus });
+        supplierIds.forEach(id => {
+            const supplierRef = doc(db, 'fornecedores', id);
+            batch.update(supplierRef, { status: newStatus });
         });
 
         try {
             await batch.commit();
-            setClientes(prev => prev.map(c => clientIds.includes(c.id) ? { ...c, status: newStatus } : c));
-            setSelectedClients([]);
-            toast({ title: 'Status Atualizado', description: `Cliente(s) foram marcados como ${newStatus === 'ativo' ? 'ativos' : 'inativos'}.` });
+            setFornecedores(prev => prev.map(s => supplierIds.includes(s.id) ? { ...s, status: newStatus } : s));
+            setSelectedSuppliers([]);
+            toast({ title: 'Status Atualizado', description: `Fornecedor(es) foram marcados como ${newStatus === 'ativo' ? 'ativos' : 'inativos'}.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status do(s) cliente(s).' });
+            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status do(s) fornecedor(es).' });
         }
     };
 
     const handleBulkDelete = async () => {
         const batch = writeBatch(db);
-        selectedClients.forEach(id => {
-            batch.delete(doc(db, 'clientes', id));
+        selectedSuppliers.forEach(id => {
+            batch.delete(doc(db, 'fornecedores', id));
         });
 
         try {
             await batch.commit();
-            setClientes(prev => prev.filter(c => !selectedClients.includes(c.id)));
-            setSelectedClients([]);
-            toast({ title: 'Clientes Excluídos', description: `${selectedClients.length} clientes foram removidos com sucesso.` });
+            setFornecedores(prev => prev.filter(s => !selectedSuppliers.includes(s.id)));
+            setSelectedSuppliers([]);
+            toast({ title: 'Fornecedores Excluídos', description: `${selectedSuppliers.length} fornecedores foram removidos com sucesso.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover os clientes selecionados.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover os fornecedores selecionados.' });
         }
     };
 
-    const filteredAndSortedClients = useMemo(() => {
-        let filtered = clientes;
+    const filteredAndSortedSuppliers = useMemo(() => {
+        let filtered = fornecedores;
 
         if (activeTab !== 'todos') {
-            filtered = filtered.filter(c => c.status === activeTab);
+            filtered = filtered.filter(s => s.status === activeTab);
         }
 
         if (searchTerm) {
             const lowerCaseTerm = searchTerm.toLowerCase();
-            filtered = filtered.filter(c => {
-                const nome = c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto;
-                const documento = c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf;
-                return (nome && nome.toLowerCase().includes(lowerCaseTerm)) ||
-                       (documento && documento.includes(lowerCaseTerm)) ||
-                       (c.nomeFantasia && c.nomeFantasia.toLowerCase().includes(lowerCaseTerm));
-            });
+            filtered = filtered.filter(s => 
+                s.razaoSocial.toLowerCase().includes(lowerCaseTerm) ||
+                s.nomeFantasia.toLowerCase().includes(lowerCaseTerm) ||
+                s.cnpj.toLowerCase().includes(lowerCaseTerm)
+            );
         }
         
         if (sortConfig !== null) {
             filtered.sort((a, b) => {
-                let aValue, bValue;
-
-                if (sortConfig.key === 'nome') {
-                    aValue = a.tipoPessoa === 'juridica' ? a.razaoSocial : a.nomeCompleto;
-                    bValue = b.tipoPessoa === 'juridica' ? b.razaoSocial : b.nomeCompleto;
-                } else if (sortConfig.key === 'documento') {
-                    aValue = a.tipoPessoa === 'juridica' ? a.cnpj : a.cpf;
-                    bValue = b.tipoPessoa === 'juridica' ? b.cnpj : b.cpf;
-                } else {
-                    aValue = a[sortConfig.key as keyof Cliente];
-                    bValue = b[sortConfig.key as keyof Cliente];
-                }
-
-                if (aValue === undefined || aValue === null) return 1;
-                if (bValue === undefined || bValue === null) return -1;
-
-                if (String(aValue).toLowerCase() < String(bValue).toLowerCase()) {
+                if (a[sortConfig.key] < b[sortConfig.key]) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
                 }
-                if (String(aValue).toLowerCase() > String(bValue).toLowerCase()) {
+                if (a[sortConfig.key] > b[sortConfig.key]) {
                     return sortConfig.direction === 'ascending' ? 1 : -1;
                 }
                 return 0;
@@ -201,9 +179,9 @@ export function ClientManagement() {
         }
         
         return filtered;
-    }, [clientes, activeTab, searchTerm, sortConfig]);
+    }, [fornecedores, activeTab, searchTerm, sortConfig]);
 
-    const requestSort = (key: keyof Cliente | 'nome' | 'documento') => {
+    const requestSort = (key: keyof Fornecedor) => {
         let direction: 'ascending' | 'descending' = 'ascending';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
             direction = 'descending';
@@ -211,55 +189,54 @@ export function ClientManagement() {
         setSortConfig({ key, direction });
     };
 
-    const getSortIcon = (key: keyof Cliente | 'nome' | 'documento') => {
+    const getSortIcon = (key: keyof Fornecedor) => {
         if (!sortConfig || sortConfig.key !== key) {
             return <ArrowUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />;
         }
         return sortConfig.direction === 'ascending' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
     };
     
-    const clientCounts = useMemo(() => {
+    const counts = useMemo(() => {
         return {
-            ativo: clientes.filter(c => c.status === 'ativo').length,
-            inativo: clientes.filter(c => c.status === 'inativo').length,
-            todos: clientes.length,
+            ativo: fornecedores.filter(s => s.status === 'ativo').length,
+            inativo: fornecedores.filter(s => s.status === 'inativo').length,
+            todos: fornecedores.length,
         }
-    }, [clientes]);
+    }, [fornecedores]);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedClients(filteredAndSortedClients.map(c => c.id));
+            setSelectedSuppliers(filteredAndSortedSuppliers.map(s => s.id));
         } else {
-            setSelectedClients([]);
+            setSelectedSuppliers([]);
         }
     };
     
-    const handleSelectClient = (id: string, checked: boolean) => {
+    const handleSelect = (id: string, checked: boolean) => {
         if (checked) {
-            setSelectedClients(prev => [...prev, id]);
+            setSelectedSuppliers(prev => [...prev, id]);
         } else {
-            setSelectedClients(prev => prev.filter(clientId => clientId !== id));
+            setSelectedSuppliers(prev => prev.filter(supplierId => supplierId !== id));
         }
     };
 
-    const isAllSelected = selectedClients.length > 0 && selectedClients.length === filteredAndSortedClients.length;
+    const isAllSelected = selectedSuppliers.length > 0 && selectedSuppliers.length === filteredAndSortedSuppliers.length;
 
-    const totalPages = Math.ceil(filteredAndSortedClients.length / itemsPerPage);
-    const paginatedClients = filteredAndSortedClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
+    const totalPages = Math.ceil(filteredAndSortedSuppliers.length / itemsPerPage);
+    const paginatedSuppliers = filteredAndSortedSuppliers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
-        const tableData = filteredAndSortedClients.map(c => [
-            c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
-            c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
-            c.email,
-            c.telefone,
-            c.status,
+        const tableData = filteredAndSortedSuppliers.map(s => [
+            s.razaoSocial,
+            s.cnpj,
+            s.email,
+            s.telefone,
+            s.status,
         ]);
 
         autoTable(doc, {
-            head: [['Nome/Razão Social', 'CPF/CNPJ', 'E-mail', 'Telefone', 'Situação']],
+            head: [['Nome', 'CNPJ', 'E-mail', 'Telefone', 'Situação']],
             body: tableData,
             didDrawPage: (data) => {
                 doc.setFontSize(16);
@@ -282,34 +259,26 @@ export function ClientManagement() {
             margin: { top: 30 },
         });
 
-        if (action === 'save') {
-            doc.save('relatorio_clientes.pdf');
-        } else {
+        if (action === 'print') {
             doc.output('dataurlnewwindow');
+        } else {
+            doc.save('relatorio_fornecedores.pdf');
         }
     };
 
     const handlePrint = () => {
-        generatePDF('Relatório de Clientes', 'print');
+        generatePDF('Relatório de Fornecedores', 'print');
     };
 
     const handleExportPDF = () => {
-        generatePDF('Relatório de Clientes', 'save');
+        generatePDF('Relatório de Fornecedores', 'save');
     };
 
-
     const handleExportExcel = () => {
-        const dataToExport = filteredAndSortedClients.map(c => ({
-            "Nome/Razão Social": c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
-            "CPF/CNPJ": c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
-            "Email": c.email,
-            "Telefone": c.telefone,
-            "Status": c.status,
-        }));
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const worksheet = XLSX.utils.json_to_sheet(filteredAndSortedSuppliers);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Clientes');
-        XLSX.writeFile(workbook, 'relatorio_clientes.xlsx');
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Fornecedores');
+        XLSX.writeFile(workbook, 'relatorio_fornecedores.xlsx');
     };
 
     const showDevelopmentToast = () => {
@@ -333,11 +302,11 @@ export function ClientManagement() {
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                  <Button 
-                    onClick={() => { setIsLoading(true); router.push('/expedicao/cadastros/clientes/new')}}
+                    onClick={() => { setIsLoading(true); router.push('/expedicao/cadastros/fornecedores/new')}}
                     className="transition-transform duration-200 hover:scale-105"
                  >
                     <PlusCircle className="mr-2 h-4 w-4" />
-                    Novo Cliente
+                    Novo Fornecedor
                 </Button>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -354,7 +323,7 @@ export function ClientManagement() {
                         <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar Clientes</DropdownMenuItem>
+                        <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar</DropdownMenuItem>
                         <DropdownMenuItem onClick={showDevelopmentToast}><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -364,7 +333,7 @@ export function ClientManagement() {
                 <CardContent className="p-4 space-y-4">
                     <div className="relative flex-grow">
                          <Input 
-                            placeholder="Pesquisar por nome, razão social, CPF ou CNPJ..."
+                            placeholder="Pesquisar por razão social, nome fantasia ou CNPJ"
                             className="pl-4 pr-10 bg-white border-gray-300 text-black"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -374,36 +343,36 @@ export function ClientManagement() {
 
                     <div className="grid grid-cols-3 text-center border-b">
                         <button onClick={() => setActiveTab('ativo')} className={cn("py-3 relative text-black", activeTab === 'ativo' && "font-semibold")}>
-                            Ativo <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.ativo}</Badge>
+                            Ativo <Badge className="ml-2 bg-gray-200 text-black">{counts.ativo}</Badge>
                             {activeTab === 'ativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
                         </button>
                         <button onClick={() => setActiveTab('inativo')} className={cn("py-3 relative text-black", activeTab === 'inativo' && "font-semibold")}>
-                            Inativo <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.inativo}</Badge>
+                            Inativo <Badge className="ml-2 bg-gray-200 text-black">{counts.inativo}</Badge>
                              {activeTab === 'inativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
                         </button>
                         <button onClick={() => setActiveTab('todos')} className={cn("py-3 relative text-black", activeTab === 'todos' && "font-semibold")}>
-                            Todos <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.todos}</Badge>
+                            Todos <Badge className="ml-2 bg-gray-200 text-black">{counts.todos}</Badge>
                              {activeTab === 'todos' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
                         </button>
                     </div>
 
-                    {canManageClients && selectedClients.length > 1 && (
+                    {canManage && selectedSuppliers.length > 1 && (
                         <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
-                            <span className="text-sm text-black">{selectedClients.length} registro(s) selecionado(s)</span>
+                            <span className="text-sm text-black">{selectedSuppliers.length} registro(s) selecionado(s)</span>
                              <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button variant="link" className="p-0 h-auto text-sm text-destructive">Excluir</Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedClients.length} cliente(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedSuppliers.length} fornecedor(es)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
                                     <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleBulkDelete}>Confirmar</AlertDialogAction></AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
                             {activeTab === 'ativo' && (
-                                <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedClients, 'inativo')}>Inativar</Button>
+                                <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedSuppliers, 'inativo')}>Inativar</Button>
                             )}
                             {activeTab === 'inativo' && (
-                                <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedClients, 'ativo')}>Reativar</Button>
+                                <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedSuppliers, 'ativo')}>Reativar</Button>
                             )}
                         </div>
                     )}
@@ -415,48 +384,48 @@ export function ClientManagement() {
                     <Table>
                         <TableHeader>
                             <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManageClients} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('documento')}>CPF/CNPJ {getSortIcon('documento')}</TableHead>
+                                <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('razaoSocial')}>Nome {getSortIcon('razaoSocial')}</TableHead>
+                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
                                 <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                 <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                 <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                {canManageClients && <TableHead className="text-right text-black">Ações</TableHead>}
+                                {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
                             </TableRow>
                         </TableHeader>
                          <TableBody>
                             {loading ? (
                                 [...Array(5)].map((_, i) => (
                                     <TableRow key={i}>
-                                        <TableCell colSpan={canManageClients ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
+                                        <TableCell colSpan={canManage ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
                                     </TableRow>
                                 ))
-                            ) : paginatedClients.length > 0 ? (
-                                paginatedClients.map(client => (
-                                    <TableRow key={client.id}>
-                                        <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManageClients} checked={selectedClients.includes(client.id)} onCheckedChange={(checked) => handleSelectClient(client.id, !!checked)} /></TableCell>
-                                        <TableCell className="font-medium text-black">{client.tipoPessoa === 'juridica' ? client.razaoSocial : client.nomeCompleto}</TableCell>
-                                        <TableCell className="text-black">{client.tipoPessoa === 'juridica' ? client.cnpj : client.cpf}</TableCell>
-                                        <TableCell className="text-black">{client.email}</TableCell>
-                                        <TableCell className="text-black">{client.telefone}</TableCell>
+                            ) : paginatedSuppliers.length > 0 ? (
+                                paginatedSuppliers.map(supplier => (
+                                    <TableRow key={supplier.id}>
+                                        <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedSuppliers.includes(supplier.id)} onCheckedChange={(checked) => handleSelect(supplier.id, !!checked)} /></TableCell>
+                                        <TableCell className="font-medium text-black">{supplier.razaoSocial}</TableCell>
+                                        <TableCell className="text-black">{supplier.cnpj}</TableCell>
+                                        <TableCell className="text-black">{supplier.email}</TableCell>
+                                        <TableCell className="text-black">{supplier.telefone}</TableCell>
                                         <TableCell>
-                                            <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className={cn(client.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{client.status}</Badge>
+                                            <Badge variant={supplier.status === 'ativo' ? 'default' : 'secondary'} className={cn(supplier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{supplier.status}</Badge>
                                         </TableCell>
-                                        {canManageClients && (
+                                        {canManage && (
                                         <TableCell className="text-right">
                                              <DropdownMenu>
                                                 <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => router.push(`/expedicao/cadastros/clientes/edit/${client.id}`)}>
+                                                    <DropdownMenuItem onClick={() => router.push(`/expedicao/cadastros/fornecedores/edit/${supplier.id}`)}>
                                                         <Edit className="mr-2 h-4 w-4" /> Editar
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    {client.status === 'ativo' ? (
-                                                        <DropdownMenuItem onClick={() => handleToggleStatus([client.id], 'inativo')}>
+                                                    {supplier.status === 'ativo' ? (
+                                                        <DropdownMenuItem onClick={() => handleToggleStatus([supplier.id], 'inativo')}>
                                                             <UserX className="mr-2 h-4 w-4" /> Inativar
                                                         </DropdownMenuItem>
                                                     ) : (
-                                                        <DropdownMenuItem onClick={() => handleToggleStatus([client.id], 'ativo')}>
+                                                        <DropdownMenuItem onClick={() => handleToggleStatus([supplier.id], 'ativo')}>
                                                             <UserCheck className="mr-2 h-4 w-4" /> Reativar
                                                         </DropdownMenuItem>
                                                     )}
@@ -470,12 +439,12 @@ export function ClientManagement() {
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                                                 <AlertDialogDescription>
-                                                                    Tem certeza que deseja excluir o cliente "{client.tipoPessoa === 'juridica' ? client.razaoSocial : client.nomeCompleto}"? Esta ação é permanente.
+                                                                    Tem certeza que deseja excluir o fornecedor "{supplier.razaoSocial}"? Esta ação é permanente.
                                                                 </AlertDialogDescription>
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter>
                                                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDeleteClient(client.id)}>Confirmar</AlertDialogAction>
+                                                                <AlertDialogAction onClick={() => handleDelete(supplier.id)}>Confirmar</AlertDialogAction>
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
@@ -487,13 +456,13 @@ export function ClientManagement() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={canManageClients ? 7 : 6} className="text-center h-24 text-black">Nenhum cliente encontrado.</TableCell>
+                                    <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhum fornecedor encontrado.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </CardContent>
-                 <CardContent className="border-t p-4">
+                <CardContent className="border-t p-4">
                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-black">
                         <div className="flex items-center gap-2">
                            <Select
@@ -515,7 +484,7 @@ export function ClientManagement() {
                             <span>Registros por página</span>
                         </div>
                         <div className="flex items-center gap-4">
-                            <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedClients.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedClients.length)} de {filteredAndSortedClients.length} registros</span>
+                            <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedSuppliers.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedSuppliers.length)} de {filteredAndSortedSuppliers.length} registros</span>
                             <div className="flex items-center gap-1">
                                 <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
                                 <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>

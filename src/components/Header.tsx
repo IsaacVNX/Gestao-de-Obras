@@ -19,7 +19,7 @@ import { LogOut, User as UserIcon, Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import SidebarContent from './SidebarContent';
 import { cn } from '@/lib/utils';
-import { navLinks, type NavItem, type SubNavItem, type CollapsibleSubMenu } from '@/lib/nav-links';
+import { navLinks, type NavItem, type SubNavItem, type CollapsibleSubMenu, type MenuLabel } from '@/lib/nav-links';
 import { useEffect, useState } from 'react';
 
 
@@ -33,29 +33,29 @@ const getInitials = (name: string) => {
 
 interface HeaderProps {
     user: User | null;
+    isSidebarCollapsed: boolean;
+    isSubMenuVisible: boolean;
+    activeMenuKey: string | null;
 }
-
-const findCurrentPage = (items: (NavItem | SubNavItem | CollapsibleSubMenu)[], pathname: string): NavItem | SubNavItem | CollapsibleSubMenu | null => {
-  for (const item of items) {
-    if ('href' in item && item.href && pathname.startsWith(item.href)) {
-      return item;
-    }
-    if ('subItems' in item && item.subItems) {
-      const found = findCurrentPage(item.subItems, pathname);
-      if (found) return found;
-    }
-  }
-  return null;
-};
 
 const findMainCategory = (pathname: string): NavItem | null => {
     for (const link of navLinks) {
-        if (link.href && pathname.startsWith(link.href)) return link;
+        // This is a direct link like /dashboard
+        if (link.href && pathname.startsWith(link.href)) {
+          return link;
+        }
+        // This is a category with sub-items
         if (link.subItems) {
-             const hasMatch = link.subItems.some(sub => 
-                ('href' in sub && pathname.startsWith(sub.href)) ||
-                ('subItems' in sub && sub.subItems.some(s => pathname.startsWith(s.href)))
-            );
+             const hasMatch = link.subItems.some(sub => {
+                if (sub.type === 'label') return false;
+                // This is a direct sub-item link
+                if ('href' in sub && sub.href && pathname.startsWith(sub.href)) return true;
+                // This is a collapsible sub-menu
+                if (sub.type === 'collapsible' && 'subItems' in sub && sub.subItems) {
+                    return sub.subItems.some(s => s.href && pathname.startsWith(s.href));
+                }
+                return false;
+            });
             if(hasMatch) return link;
         }
     }
@@ -63,7 +63,7 @@ const findMainCategory = (pathname: string): NavItem | null => {
 }
 
 
-export default function Header({ user }: HeaderProps) {
+export default function Header({ user, isSidebarCollapsed, isSubMenuVisible, activeMenuKey }: HeaderProps) {
     const { logout } = useAuth();
     const { setIsLoading } = useLoading();
     const router = useRouter();
@@ -71,14 +71,8 @@ export default function Header({ user }: HeaderProps) {
     const [pageTitle, setPageTitle] = useState('');
 
     useEffect(() => {
-        const currentPage = findCurrentPage(navLinks, pathname);
-        if (currentPage) {
-            setPageTitle(currentPage.label);
-        } else {
-            // Fallback for dynamic pages (e.g., /obras/[id])
-            const mainCategory = findMainCategory(pathname);
-            setPageTitle(mainCategory?.label || '');
-        }
+        const mainCategory = findMainCategory(pathname);
+        setPageTitle(mainCategory?.label || '');
     }, [pathname]);
 
     const handleNavigate = (path: string) => {
@@ -87,65 +81,69 @@ export default function Header({ user }: HeaderProps) {
     };
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur-sm">
-            <div className={cn(
-                "flex items-center gap-4 transition-all duration-300 ease-in-out",
-                 "lg:ml-0" // The header content itself doesn't need a margin, the AppLayout handles the main content
-                )}>
-                 <div className="lg:hidden">
-                    <Sheet>
-                        <SheetTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 text-foreground"
-                        >
-                            <Menu className="h-5 w-5" />
-                            <span className="sr-only">Toggle navigation menu</span>
-                        </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="flex flex-col p-0 bg-sidebar">
-                            <SidebarContent isMobile={true} />
-                        </SheetContent>
-                    </Sheet>
-                 </div>
-                 <div className='hidden lg:flex items-center gap-4'>
-                    <Link href="/dashboard" className="flex items-center gap-2" onClick={() => handleNavigate('/dashboard')}>
-                        <Image priority src="https://grupomatos.ind.br/storage/2024/06/Perfil-Grupo-Matos2.png" alt="Grupo Matos Logo" width={150} height={150} className="h-10 w-auto" />
-                    </Link>
-                    {pageTitle && <span className="font-bold text-lg text-foreground">{pageTitle}</span>}
-                 </div>
+        <header className="fixed top-0 left-0 right-0 z-30 flex h-16 items-center border-b bg-background/95 backdrop-blur-sm">
+             {/* Logo Section */}
+             <div className="hidden lg:flex items-center justify-center shrink-0" style={{ width: '270px' }}>
+                 <Link href="/dashboard" className="flex items-center gap-2" onClick={() => handleNavigate('/dashboard')}>
+                    <Image priority src="https://grupomatos.ind.br/storage/2024/06/Perfil-Grupo-Matos2.png" alt="Grupo Matos Logo" width={150} height={150} className="h-10 w-auto" />
+                </Link>
+            </div>
+
+            {/* Mobile Menu Trigger & Logo */}
+            <div className="flex items-center gap-4 lg:hidden pl-4">
+                 <Sheet>
+                    <SheetTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-foreground"
+                    >
+                        <Menu className="h-5 w-5" />
+                        <span className="sr-only">Toggle navigation menu</span>
+                    </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="flex flex-col p-0 bg-sidebar">
+                        <SidebarContent isMobile={true} />
+                    </SheetContent>
+                </Sheet>
             </div>
             
-            {user && (
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="flex items-center gap-3">
-                         <div className="text-right hidden sm:block">
-                             <p className="text-sm font-semibold">{user.name}</p>
-                             <p className="text-xs text-muted-foreground capitalize">{getRoleName(user.role)}</p>
-                         </div>
-                        <Avatar className="h-9 w-9">
-                            <AvatarImage src={user.profileImageUrl || undefined} alt="Foto de Perfil" />
-                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                        </Avatar>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleNavigate('/profile')}>
-                        <UserIcon className="mr-2 h-4 w-4" />
-                        <span>Meu Perfil</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-                        <LogOut className="mr-2 h-4 w-4" />
-                        <span>Sair</span>
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-            )}
+            {/* Title and User Menu Section */}
+            <div className="flex flex-1 items-center justify-between pl-4 pr-4">
+                 <div className="flex-1">
+                    {pageTitle && <span className="font-bold text-2xl text-foreground">{pageTitle}</span>}
+                 </div>
+            
+                {user && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="flex items-center gap-3">
+                             <div className="text-right hidden sm:block">
+                                 <p className="text-sm font-semibold">{user.name}</p>
+                                 <p className="text-xs text-muted-foreground capitalize">{getRoleName(user.role)}</p>
+                             </div>
+                            <Avatar className="h-9 w-9">
+                                <AvatarImage src={user.profileImageUrl || undefined} alt="Foto de Perfil" />
+                                <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                            </Avatar>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleNavigate('/profile')}>
+                            <UserIcon className="mr-2 h-4 w-4" />
+                            <span>Meu Perfil</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            <span>Sair</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                )}
+            </div>
         </header>
     )
 }

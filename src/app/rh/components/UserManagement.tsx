@@ -36,6 +36,10 @@ import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useLoading } from '@/hooks/use-loading';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { useToast } from '@/hooks/use-toast';
 
 const getRoleName = (role: string) => {
   switch (role) {
@@ -62,12 +66,14 @@ const getInitials = (name: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 };
 
-const USERS_PER_PAGE = 10;
+const ITEMS_PER_PAGE_OPTIONS = [10, 20, 30, 50, 100];
+
 
 export function UserManagement() {
   const { user } = useAuth();
   const router = useRouter();
   const { setIsLoading } = useLoading();
+  const { toast } = useToast();
   
   const { 
     usuarios, 
@@ -83,7 +89,9 @@ export function UserManagement() {
   const [newRole, setNewRole] = useState('');
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [goToPageInput, setGoToPageInput] = useState('');
   
   const isAdmin = user?.role === 'admin';
   const isGestor = user?.role === 'gestor';
@@ -96,9 +104,13 @@ export function UserManagement() {
   };
   
   const filteredUsers = useMemo(() => {
-    if (!searchTerm) return usuarios;
+    let usersToFilter = usuarios;
+    if (activeTab !== 'todos') {
+        usersToFilter = usersToFilter.filter(u => u.status === activeTab);
+    }
+    if (!searchTerm) return usersToFilter;
 
-    return usuarios.filter(u => {
+    return usersToFilter.filter(u => {
         const lowerCaseTerm = searchTerm.toLowerCase();
         const searchByName = u.nome.toLowerCase().includes(lowerCaseTerm);
         const searchByEmail = isAdmin && u.email.toLowerCase().includes(lowerCaseTerm);
@@ -106,14 +118,17 @@ export function UserManagement() {
         
         return searchByName || searchByEmail || searchByRole;
     });
-  }, [searchTerm, usuarios, isAdmin]);
+  }, [searchTerm, usuarios, isAdmin, activeTab]);
+  
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const userCounts = useMemo(() => {
-    const ativos = filteredUsers.filter(u => u.status === 'ativo').length;
-    const inativos = filteredUsers.filter(u => u.status === 'inativo').length;
-    const todos = filteredUsers.length;
+    const ativos = usuarios.filter(u => u.status === 'ativo').length;
+    const inativos = usuarios.filter(u => u.status === 'inativo').length;
+    const todos = usuarios.length;
     return { ativos, inativos, todos };
-  }, [filteredUsers]);
+  }, [usuarios]);
 
 
   const handleOpenEditDialog = (userToEdit: Usuario) => {
@@ -134,6 +149,96 @@ export function UserManagement() {
     handleCloseEditDialog();
   };
 
+    const generatePDF = (title: string, action: 'save' | 'print') => {
+        const doc = new jsPDF();
+        const tableData = filteredUsers.map(u => [
+            u.nome,
+            u.email,
+            getRoleName(u.role),
+            u.status === 'ativo' ? 'Ativo' : 'Inativo'
+        ]);
+
+        autoTable(doc, {
+            head: [['Nome', 'Email', 'Função', 'Status']],
+            body: tableData,
+            didDrawPage: (data) => {
+                // Header
+                doc.setFontSize(16);
+                doc.setTextColor(40);
+                doc.text("Gestão de Obras", data.settings.margin.left, 15);
+                doc.setFontSize(12);
+                doc.text(title, data.settings.margin.left, 22);
+
+                // Footer
+                let footerText = `Página ${data.pageNumber}`;
+                 if ((doc as any).putTotalPages) {
+                    footerText += ` de {totalPages}`;
+                }
+                const dateText = `Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`;
+                
+                doc.setFontSize(10);
+                doc.setTextColor(150);
+
+                // Page number
+                doc.text(footerText, data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
+                
+                // Date
+                const dateTextWidth = doc.getStringUnitWidth(dateText) * doc.getFontSize() / doc.internal.scaleFactor;
+                doc.text(dateText, doc.internal.pageSize.getWidth() - data.settings.margin.right - dateTextWidth, doc.internal.pageSize.getHeight() - 10);
+            },
+            margin: { top: 30 },
+        });
+
+        if ((doc as any).putTotalPages) {
+            (doc as any).putTotalPages('{totalPages}');
+        }
+
+
+        if (action === 'save') {
+            doc.save('relatorio_usuarios.pdf');
+        } else {
+            doc.output('dataurlnewwindow');
+        }
+    };
+    
+    const handlePrint = () => {
+        generatePDF('Relatório de Usuários', 'print');
+    };
+
+    const handleExportPDF = () => {
+        generatePDF('Relatório de Usuários', 'save');
+    };
+
+    const handleExportExcel = () => {
+        const dataToExport = filteredUsers.map(u => ({
+            Nome: u.nome,
+            Email: u.email,
+            Função: getRoleName(u.role),
+            Status: u.status === 'ativo' ? 'Ativo' : 'Inativo'
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Usuarios');
+        XLSX.writeFile(workbook, 'relatorio_usuarios.xlsx');
+    };
+
+    const showDevelopmentToast = () => {
+        toast({
+            title: 'Em desenvolvimento',
+            description: 'Esta funcionalidade está sendo preparada e estará disponível em breve.',
+        });
+    };
+    
+    const handleGoToPage = () => {
+        const page = parseInt(goToPageInput, 10);
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        } else {
+            toast({ variant: 'destructive', title: 'Página Inválida', description: `Por favor, insira um número entre 1 e ${totalPages}.`});
+        }
+        setGoToPageInput('');
+    };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case 'admin':
@@ -148,38 +253,6 @@ export function UserManagement() {
       default:
         return 'secondary';
     }
-  };
-  
-  const renderPagination = (totalUsers: number) => {
-    const totalPages = Math.ceil(totalUsers / USERS_PER_PAGE) || 1;
-
-    return (
-        <div className="flex items-center justify-end space-x-2 py-4 px-4">
-            <span className="text-sm text-black">
-                Página {currentPage} de {totalPages}
-            </span>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="bg-white text-black hover:bg-white/80"
-            >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-            </Button>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="bg-white text-black hover:bg-white/80"
-            >
-                Próxima
-                <ChevronRight className="h-4 w-4" />
-            </Button>
-        </div>
-    );
   };
 
   if (!user || (user.role !== 'admin' && user.role !== 'gestor' && user.role !== 'escritorio')) {
@@ -240,15 +313,9 @@ export function UserManagement() {
       </DropdownMenu>
   )};
 
-  const renderContent = (statusFilter: 'ativo' | 'inativo' | 'todos') => {
-    const tableUsers = statusFilter === 'todos'
-        ? filteredUsers
-        : filteredUsers.filter(u => u.status === statusFilter);
-
-    const paginatedUsers = tableUsers.slice((currentPage - 1) * USERS_PER_PAGE, currentPage * USERS_PER_PAGE);
-    
+  const renderContent = () => {
     let colSpan = (isAdmin ? 4 : 3) + (canTakeAction ? 1 : 0);
-    if (statusFilter === 'todos') {
+    if (activeTab === 'todos') {
         colSpan += 1; // Add one for the status column
     }
 
@@ -297,7 +364,7 @@ export function UserManagement() {
                 <TableHead className="text-black">Nome Completo</TableHead>
                 {isAdmin && <TableHead className="text-black">Email (Login)</TableHead>}
                 <TableHead className="text-black">Função</TableHead>
-                {statusFilter === 'todos' && <TableHead className="text-black">Status</TableHead>}
+                {activeTab === 'todos' && <TableHead className="text-black">Status</TableHead>}
                 {canTakeAction && <TableHead className="text-right text-black">Ações</TableHead>}
               </TableRow>
             </TableHeader>
@@ -323,7 +390,7 @@ export function UserManagement() {
                   <TableCell className="text-black">
                     {getRoleName(u.role)}
                   </TableCell>
-                  {statusFilter === 'todos' && (
+                  {activeTab === 'todos' && (
                     <TableCell>
                         <Badge variant={u.status === 'ativo' ? 'default' : 'secondary'} className={cn(u.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>
                             {u.status === 'ativo' ? 'Ativo' : 'Inativo'}
@@ -345,7 +412,49 @@ export function UserManagement() {
             </TableBody>
           </Table>
         </div>
-        {renderPagination(tableUsers.length)}
+        <CardContent className="border-t p-4">
+             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-black">
+                <div className="flex items-center gap-2">
+                   <Select
+                        value={String(itemsPerPage)}
+                        onValueChange={(value) => {
+                            setItemsPerPage(Number(value));
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <SelectTrigger className="w-[80px] bg-white text-black">
+                            <SelectValue placeholder={itemsPerPage} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {ITEMS_PER_PAGE_OPTIONS.map(option => (
+                                <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <span>Registros por página</span>
+                </div>
+                <div className="flex items-center gap-4">
+                    <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredUsers.length)} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} de {filteredUsers.length} registros</span>
+                    <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>
+                        <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>Próximo</Button>
+                        <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                    </div>
+                </div>
+                 <div className="flex items-center gap-2">
+                     <span>Ir para página</span>
+                     <Input 
+                        type="number" 
+                        className="w-20 bg-white" 
+                        value={goToPageInput}
+                        onChange={(e) => setGoToPageInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleGoToPage()}
+                    />
+                     <Button variant="outline" className="bg-white" onClick={handleGoToPage}>Ok</Button>
+                 </div>
+            </div>
+        </CardContent>
       </Card>
   )};
 
@@ -368,18 +477,18 @@ export function UserManagement() {
                      <Button variant="outline" className="text-black">Exportar <ChevronDown className="ml-2 h-4 w-4" /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                    <DropdownMenuItem>Exportar para PDF</DropdownMenuItem>
-                    <DropdownMenuItem>Exportar para Excel</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF}>Exportar para PDF</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportExcel}>Exportar para Excel</DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" className="text-black"><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
+            <Button variant="outline" className="text-black" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
                 </DropdownMenuTrigger>
                  <DropdownMenuContent>
-                    <DropdownMenuItem><Upload className="mr-2 h-4 w-4" />Importar Usuários</DropdownMenuItem>
-                    <DropdownMenuItem><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
+                    <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar Usuários</DropdownMenuItem>
+                    <DropdownMenuItem onClick={showDevelopmentToast}><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
@@ -397,7 +506,6 @@ export function UserManagement() {
                         />
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     </div>
-                    <Button variant="outline" className="text-black">Mais filtros <ChevronDown className="ml-2 h-4 w-4" /></Button>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -419,17 +527,9 @@ export function UserManagement() {
             </CardContent>
         </Card>
       
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsContent value="ativo" className="mt-4">
-                {renderContent('ativo')}
-            </TabsContent>
-            <TabsContent value="inativo" className="mt-4">
-                {renderContent('inativo')}
-            </TabsContent>
-            <TabsContent value="todos" className="mt-4">
-                {renderContent('todos')}
-            </TabsContent>
-        </Tabs>
+        <div className="mt-4">
+            {renderContent()}
+        </div>
       </div>
       
       {/* Edit Role Dialog */}

@@ -1,4 +1,4 @@
-# Sistema - Gestão de Obras
+# Gestão de Obras
 
 Esta é uma aplicação web construída com Next.js, React, TypeScript e Tailwind CSS, projetada para gerenciar obras, equipes e checklists de segurança.
 

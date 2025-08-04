@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, HardHat, Users, Warehouse, Map, Truck, Building, Package, LogIn, LogOut, ClipboardCheck, UserPlus } from 'lucide-react';
+import { LayoutDashboard, HardHat, Users, Warehouse, Map, Truck, Building, Package, LogIn, LogOut, ClipboardCheck, UserPlus, DollarSign, ShoppingCart } from 'lucide-react';
 import React from 'react';
 
 export type SubNavItem = {
@@ -50,7 +50,7 @@ export const navLinks: NavItem[] = [
         icon: HardHat, 
         roles: ['admin', 'gestor', 'escritorio', 'encarregado', 'montador'],
         subItems: [
-             { key: 'obras-lista', href: '/obras', label: 'Lista de Obras', icon: HardHat, roles: ['admin', 'gestor', 'escritorio', 'encarregado', 'montador'], type: 'link' },
+             { key: 'obras-painel', href: '/obras', label: 'Painel de Obras', icon: HardHat, roles: ['admin', 'gestor', 'escritorio', 'encarregado', 'montador'], type: 'link' },
         ]
     },
     { 
@@ -59,8 +59,16 @@ export const navLinks: NavItem[] = [
         icon: Users, 
         roles: ['admin', 'gestor', 'escritorio'],
         subItems: [
-            { key: 'rh-users', href: '/rh', label: 'Gerenciamento de Usuários', icon: Users, roles: ['admin', 'gestor', 'escritorio'], type: 'link' },
-            { key: 'rh-new-user', href: '/rh/cadastros/usuarios/new', label: 'Novo Usuário', icon: UserPlus, roles: ['admin', 'gestor'], type: 'link' },
+            { key: 'rh-painel', href: '/rh', label: 'Painel de RH', icon: Users, roles: ['admin', 'gestor', 'escritorio'], type: 'link' },
+             {
+                type: 'collapsible',
+                key: 'rh-cadastros',
+                label: 'Cadastros',
+                roles: ['admin', 'gestor', 'escritorio'],
+                subItems: [
+                    { key: 'rh-users', href: '/rh/cadastros/usuarios', label: 'Usuários', icon: UserPlus, roles: ['admin', 'gestor', 'escritorio'] },
+                ]
+            }
         ]
     },
     { 
@@ -75,9 +83,10 @@ export const navLinks: NavItem[] = [
     { 
         key: 'expedicao',
         label: 'Expedição', 
-        icon: Truck, 
+        icon: Package, 
         roles: ['admin', 'gestor', 'escritorio'],
         subItems: [
+            { key: 'expedicao-painel', href: '/expedicao', label: 'Painel de Expedição', icon: Package, roles: ['admin', 'gestor', 'escritorio'], type: 'link' },
             {
                 type: 'collapsible',
                 key: 'registros',
@@ -100,6 +109,33 @@ export const navLinks: NavItem[] = [
                     { key: 'fornecedores', href: '/expedicao/cadastros/fornecedores', label: 'Fornecedores', icon: ClipboardCheck, roles: ['admin', 'gestor'] },
                 ]
             }
+        ]
+    },
+    { 
+        key: 'frotas', 
+        label: 'Frotas', 
+        icon: Truck, 
+        roles: ['admin', 'gestor'],
+        subItems: [
+            { key: 'frotas-painel', href: '/frotas', label: 'Painel de Frotas', icon: Truck, roles: ['admin', 'gestor'], type: 'link' },
+        ]
+    },
+    { 
+        key: 'financeiro', 
+        label: 'Financeiro', 
+        icon: DollarSign, 
+        roles: ['admin', 'gestor'],
+        subItems: [
+            { key: 'financeiro-painel', href: '/financeiro', label: 'Painel Financeiro', icon: DollarSign, roles: ['admin', 'gestor'], type: 'link' },
+        ]
+    },
+    { 
+        key: 'suprimentos', 
+        label: 'Suprimentos', 
+        icon: ShoppingCart, 
+        roles: ['admin', 'gestor'],
+        subItems: [
+            { key: 'suprimentos-painel', href: '/suprimentos', label: 'Painel de Suprimentos', icon: ShoppingCart, roles: ['admin', 'gestor'], type: 'link' },
         ]
     },
     { 

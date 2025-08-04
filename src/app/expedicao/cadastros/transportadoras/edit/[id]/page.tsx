@@ -47,7 +47,7 @@ const baseSchema = z.object({
     responsavelTelefone: z.string().optional(),
 });
 
-const clientSchema = z.discriminatedUnion("tipoPessoa", [
+const carrierSchema = z.discriminatedUnion("tipoPessoa", [
     z.object({
         tipoPessoa: z.literal('juridica'),
         razaoSocial: z.string().min(1, "A razão social é obrigatória."),
@@ -65,7 +65,6 @@ const clientSchema = z.discriminatedUnion("tipoPessoa", [
         cnpj: z.string().optional(),
     }).merge(baseSchema),
 ]);
-
 
 const FormSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <>
@@ -90,73 +89,71 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 MaskedInput.displayName = "MaskedInput";
 
 
-export default function EditClientPage() {
+export default function EditCarrierPage() {
     const { user } = useAuth();
     const router = useRouter();
     const params = useParams();
-    const clientId = params.id as string;
+    const carrierId = params.id as string;
     const { toast } = useToast();
     
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    const form = useForm<z.infer<typeof clientSchema>>({
-        resolver: zodResolver(clientSchema),
+    const form = useForm<z.infer<typeof carrierSchema>>({
+        resolver: zodResolver(carrierSchema),
         defaultValues: { tipoPessoa: 'juridica' },
     });
-    
+
     const tipoPessoa = form.watch('tipoPessoa');
 
      useEffect(() => {
-        if (!clientId) return;
+        if (!carrierId) return;
         
-        async function fetchClientData() {
+        async function fetchCarrierData() {
             setLoading(true);
             try {
-                const clientDocRef = doc(db, 'clientes', clientId);
-                const docSnap = await getDoc(clientDocRef);
+                const docRef = doc(db, 'transportadoras', carrierId);
+                const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    const clientData = docSnap.data() as z.infer<typeof clientSchema>;
+                    const data = docSnap.data() as z.infer<typeof carrierSchema>;
+                     // Set the form values, making sure to include tipoPessoa
                     form.reset({
-                        ...clientData,
-                        tipoPessoa: clientData.tipoPessoa || 'juridica',
+                        ...data,
+                        tipoPessoa: data.tipoPessoa || 'juridica', // Default to 'juridica' if not set
                     });
                 } else {
-                    toast({ variant: 'destructive', title: 'Erro', description: 'Cliente não encontrado.' });
-                    router.push('/expedicao/cadastros/clientes');
+                    toast({ variant: 'destructive', title: 'Erro', description: 'Transportadora não encontrada.' });
+                    router.push('/expedicao/cadastros/transportadoras');
                 }
             } catch (error) {
-                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados do cliente.' });
+                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados.' });
             } finally {
                 setLoading(false);
             }
         }
         
-        fetchClientData();
-    }, [clientId, form, toast, router]);
+        fetchCarrierData();
+    }, [carrierId, form, toast, router]);
 
 
-    const handleUpdateClient = async (formData: z.infer<typeof clientSchema>) => {
+    const handleUpdate = async (formData: z.infer<typeof carrierSchema>) => {
         setSaving(true);
         try {
             const dataToUpdate = {
                 ...formData,
                 cnpj: formData.cnpj?.replace(/\D/g, '') || '',
                 cpf: formData.cpf?.replace(/\D/g, '') || '',
-                responsavel: formData.responsavel || '',
-                responsavelEmail: formData.responsavelEmail || '',
-                responsavelTelefone: formData.responsavelTelefone || '',
             };
 
-            const clientDocRef = doc(db, 'clientes', clientId);
-            await updateDoc(clientDocRef, dataToUpdate);
+            const docRef = doc(db, 'transportadoras', carrierId);
+            await updateDoc(docRef, dataToUpdate);
             
-            toast({ title: 'Cliente Atualizado!', description: 'Os dados do cliente foram atualizados com sucesso.' });
-            router.push('/expedicao/cadastros/clientes');
+            toast({ title: 'Transportadora Atualizada!', description: 'Os dados foram atualizados com sucesso.' });
+            router.push('/expedicao/cadastros/transportadoras');
 
         } catch (error: any) {
             console.error("Update error: ", error);
-            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar os dados.' });
         } finally {
             setSaving(false);
         }
@@ -178,13 +175,13 @@ export default function EditClientPage() {
         )
     }
 
-    if (!user || (user.role !== 'admin' && user.role !== 'gestor' && user.role !== 'escritorio')) {
+    if (!user || (user.role !== 'admin' && user.role !== 'gestor')) {
         return (
             <AppLayout>
                 <Card className="max-w-2xl mx-auto">
                     <CardHeader>
                         <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para editar clientes.</CardDescription>
+                        <CardDescription>Você não tem permissão para editar transportadoras.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Button onClick={() => router.back()}>Voltar</Button>
@@ -198,12 +195,12 @@ export default function EditClientPage() {
         <AppLayout>
             <Card className="max-w-4xl mx-auto">
                 <CardHeader>
-                    <CardTitle className="text-2xl">Editar Cliente</CardTitle>
-                    <CardDescription className="text-card-foreground">Modifique os detalhes do cliente abaixo.</CardDescription>
+                    <CardTitle className="text-2xl">Editar Transportadora</CardTitle>
+                    <CardDescription className="text-card-foreground">Modifique os detalhes abaixo.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleUpdateClient)}>
+                    <form onSubmit={form.handleSubmit(handleUpdate)}>
                         <FormField
                             control={form.control}
                             name="tipoPessoa"
@@ -214,6 +211,7 @@ export default function EditClientPage() {
                                         <RadioGroup
                                             onValueChange={(value) => {
                                                 field.onChange(value);
+                                                // Reset fields when changing type
                                                 form.setValue('cnpj', '');
                                                 form.setValue('cpf', '');
                                                 form.setValue('razaoSocial', '');
@@ -238,7 +236,6 @@ export default function EditClientPage() {
                                 </FormItem>
                             )}
                         />
-
                          <FormSection title="Dados da Empresa">
                              {tipoPessoa === 'juridica' ? (
                                 <>
@@ -340,7 +337,7 @@ export default function EditClientPage() {
                         </FormSection>
 
                         <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/clientes')} disabled={saving}>
+                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/transportadoras')} disabled={saving}>
                                 Cancelar
                             </Button>
                             <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>

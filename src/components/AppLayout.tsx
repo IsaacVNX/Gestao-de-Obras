@@ -72,20 +72,24 @@ function InnerAppLayout({ children }: { children: ReactNode }) {
 
 
   return (
-    <div className={cn(
-      "min-h-screen w-full bg-background",
-      isLoading && "pointer-events-none"
-    )}>
+    <div className="min-h-screen w-full bg-app-background">
+      <div className="absolute inset-0 z-0 bg-background/95" />
+
       {isLoading && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <LoadingSpinner size={48} />
         </div>
       )}
       
-      <Header user={user} />
+      <Header 
+        user={user} 
+        isSidebarCollapsed={isSidebarCollapsed}
+        isSubMenuVisible={isSubMenuVisible}
+        activeMenuKey={activeMenuKey}
+      />
 
-      <div className="flex h-screen pt-16">
-        <Sidebar 
+      <div className="relative z-10 flex h-screen">
+         <Sidebar 
             isCollapsed={isSidebarCollapsed}
             setIsCollapsed={setIsSidebarCollapsed}
             activeMenuKey={activeMenuKey}
@@ -95,16 +99,13 @@ function InnerAppLayout({ children }: { children: ReactNode }) {
         />
         
         <main className={cn(
-            "relative flex-1 flex flex-col overflow-y-auto transition-all duration-300 ease-in-out",
+            "flex-1 flex flex-col overflow-y-auto transition-all duration-300 ease-in-out pt-16",
             "ml-0", // No margin on mobile, sidebar overlays
             getLeftMargin()
           )}>
-          <div className="flex-1 bg-app-background">
-              <div className="absolute inset-0 z-0 bg-background/95" />
-              <div className="relative z-10 p-4 sm:p-6 lg:p-8">
-                  {children}
-              </div>
-          </div>
+            <div className="p-4 sm:p-6 lg:p-8">
+              {children}
+            </div>
         </main>
       </div>
     </div>

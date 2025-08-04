@@ -7,7 +7,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
-type User = {
+export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
   email: string;

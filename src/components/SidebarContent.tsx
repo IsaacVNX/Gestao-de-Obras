@@ -170,7 +170,7 @@ export default function SidebarContent({
                                     </CollapsibleTrigger>
                                     <CollapsibleContent className="space-y-1 mt-1 pl-4 group">
                                         {item.subItems.map(subItem => {
-                                            const isSubActive = pathname.startsWith(subItem.href);
+                                            const isSubActive = pathname === subItem.href;
                                             return (
                                                 <a
                                                   key={subItem.key}
@@ -193,7 +193,7 @@ export default function SidebarContent({
                          }
                          
                         const subItem = item as SubNavItem;
-                        const isSubActive = subItem.href && pathname.startsWith(subItem.href);
+                        const isSubActive = subItem.href && pathname === subItem.href;
                         return (
                              <a
                                 key={subItem.key}
@@ -228,7 +228,7 @@ export default function SidebarContent({
                 </div>
                  <nav className="flex-1 space-y-1 p-2 mt-2 overflow-y-auto custom-scrollbar">
                 {navLinks.filter(link => user && link.roles.includes(user.role)).map(link => {
-                        const isActive = link.href ? pathname.startsWith(link.href) : false;
+                        const isActive = link.href ? pathname === link.href : false;
                         if (!link.subItems) {
                             return (
                                 <a key={link.key} href={link.href} onClick={(e) => { e.preventDefault(); handleNavClick(link.key, link.href); }}
@@ -269,7 +269,7 @@ export default function SidebarContent({
                                                     </CollapsibleTrigger>
                                                     <CollapsibleContent className="space-y-1 mt-1 group data-[state=open]:animate-slide-in-from-left">
                                                         {item.subItems.map(sub => {
-                                                            const isSubActive = pathname.startsWith(sub.href);
+                                                            const isSubActive = pathname === sub.href;
                                                             return (
                                                                 <a key={sub.key} href={sub.href} onClick={(e) => { e.preventDefault(); handleSubNavClick(sub.href); }}
                                                                     className={cn("flex items-center h-9 pl-12 pr-3 rounded-md gap-3 text-sm group-data-[state=open]:animate-slide-in-from-left", isSubActive ? "bg-sidebar-active text-sidebar-active-foreground font-semibold" : "hover:bg-sidebar-hover-background")}
@@ -283,7 +283,7 @@ export default function SidebarContent({
                                              )
                                         }
                                         const subItem = item as SubNavItem;
-                                        const isSubActive = subItem.href && pathname.startsWith(subItem.href);
+                                        const isSubActive = subItem.href && pathname === subItem.href;
                                         return (
                                              <a key={subItem.key} href={subItem.href} onClick={(e) => { e.preventDefault(); handleSubNavClick(subItem.href); }}
                                                 className={cn("flex items-center h-9 pl-8 pr-3 rounded-md gap-3 text-sm group-data-[state=open]:animate-slide-in-from-left", isSubActive ? "bg-sidebar-active text-sidebar-active-foreground font-semibold" : "hover:bg-sidebar-hover-background")}

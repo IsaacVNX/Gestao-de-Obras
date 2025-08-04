@@ -1,12 +1,12 @@
 
 'use client';
-import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import AppLayout from '@/components/AppLayout';
@@ -17,10 +17,9 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IMaskInput } from 'react-imask';
 import React from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
-
-const clientSchema = z.object({
+const supplierSchema = z.object({
     razaoSocial: z.string().min(1, "A razão social é obrigatória."),
     nomeFantasia: z.string().min(1, "O nome fantasia é obrigatório."),
     cnpj: z.string().min(1, "O CNPJ é obrigatório.").refine(val => val.replace(/\D/g, '').length === 14, "CNPJ deve ter 14 dígitos."),
@@ -70,90 +69,66 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 MaskedInput.displayName = "MaskedInput";
 
 
-export default function EditClientPage() {
+export default function NewSupplierPage() {
     const { user } = useAuth();
     const router = useRouter();
-    const params = useParams();
-    const clientId = params.id as string;
     const { toast } = useToast();
-    
     const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(true);
 
-    const form = useForm<z.infer<typeof clientSchema>>({
-        resolver: zodResolver(clientSchema),
-        defaultValues: {},
+    const form = useForm<z.infer<typeof supplierSchema>>({
+        resolver: zodResolver(supplierSchema),
+        defaultValues: {
+            razaoSocial: '',
+            nomeFantasia: '',
+            cnpj: '',
+            inscricaoEstadual: '',
+            email: '',
+            telefone: '',
+            cep: '',
+            logradouro: '',
+            numero: '',
+            complemento: '',
+            bairro: '',
+            cidade: '',
+            estado: '',
+            responsavel: '',
+            responsavelEmail: '',
+            responsavelTelefone: '',
+        },
     });
 
-     useEffect(() => {
-        if (!clientId) return;
-        
-        async function fetchClientData() {
-            setLoading(true);
-            try {
-                const clientDocRef = doc(db, 'clientes', clientId);
-                const docSnap = await getDoc(clientDocRef);
-                if (docSnap.exists()) {
-                    const clientData = docSnap.data();
-                    // Populate form with fetched data
-                    Object.entries(clientData).forEach(([key, value]) => {
-                        form.setValue(key as keyof z.infer<typeof clientSchema>, value);
-                    });
-                } else {
-                    toast({ variant: 'destructive', title: 'Erro', description: 'Cliente não encontrado.' });
-                    router.push('/expedicao?tab=clients');
-                }
-            } catch (error) {
-                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados do cliente.' });
-            } finally {
-                setLoading(false);
-            }
-        }
-        
-        fetchClientData();
-    }, [clientId, form, toast, router]);
-
-
-    const handleUpdateClient = async (formData: z.infer<typeof clientSchema>) => {
+    const handleCreate = async (formData: z.infer<typeof supplierSchema>) => {
         setSaving(true);
+        const cnpjDigits = formData.cnpj.replace(/\D/g, '');
+        
         try {
-            const dataToUpdate = {
+            const cnpjQuery = query(collection(db, 'fornecedores'), where('cnpj', '==', cnpjDigits));
+            const cnpjQuerySnapshot = await getDocs(cnpjQuery);
+            if (!cnpjQuerySnapshot.empty) {
+                toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Este CNPJ já está cadastrado.' });
+                setSaving(false);
+                return;
+            }
+
+            const docRef = doc(db, 'fornecedores', cnpjDigits);
+            await setDoc(docRef, {
                 ...formData,
-                cnpj: formData.cnpj.replace(/\D/g, ''), // Remove mask before saving
+                cnpj: cnpjDigits,
+                status: 'ativo',
                 responsavel: formData.responsavel || '',
                 responsavelEmail: formData.responsavelEmail || '',
                 responsavelTelefone: formData.responsavelTelefone || '',
-            };
-
-            const clientDocRef = doc(db, 'clientes', clientId);
-            await updateDoc(clientDocRef, dataToUpdate);
+            });
             
-            toast({ title: 'Cliente Atualizado!', description: 'Os dados do cliente foram atualizados com sucesso.' });
-            router.push('/expedicao?tab=clients');
+            toast({ title: 'Fornecedor Criado!', description: 'O novo fornecedor foi adicionado com sucesso.' });
+            router.push('/expedicao/cadastros/fornecedores');
 
         } catch (error: any) {
-            console.error("Update error: ", error);
-            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar o fornecedor.' });
         } finally {
             setSaving(false);
         }
     };
-    
-    if (loading) {
-        return (
-            <AppLayout>
-                <Card className="max-w-4xl mx-auto p-6 space-y-4">
-                    <Skeleton className="h-8 w-1/2" />
-                    <Skeleton className="h-4 w-3/4 mb-6" />
-                    <div className="space-y-6">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                    </div>
-                </Card>
-            </AppLayout>
-        )
-    }
 
     if (!user || (user.role !== 'admin' && user.role !== 'gestor')) {
         return (
@@ -161,7 +136,7 @@ export default function EditClientPage() {
                 <Card className="max-w-2xl mx-auto">
                     <CardHeader>
                         <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para editar clientes.</CardDescription>
+                        <CardDescription>Você não tem permissão para criar novos fornecedores.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Button onClick={() => router.back()}>Voltar</Button>
@@ -175,12 +150,12 @@ export default function EditClientPage() {
         <AppLayout>
             <Card className="max-w-4xl mx-auto">
                 <CardHeader>
-                    <CardTitle className="text-2xl">Editar Cliente</CardTitle>
-                    <CardDescription className="text-card-foreground">Modifique os detalhes do cliente abaixo.</CardDescription>
+                    <CardTitle className="text-2xl">Adicionar Novo Fornecedor</CardTitle>
+                    <CardDescription className="text-card-foreground">Preencha os detalhes abaixo.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleUpdateClient)}>
+                    <form onSubmit={form.handleSubmit(handleCreate)}>
                          <FormSection title="Dados da Empresa">
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField control={form.control} name="razaoSocial" render={({ field }) => (
@@ -192,7 +167,7 @@ export default function EditClientPage() {
                              </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                    <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
                                     <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
@@ -202,16 +177,16 @@ export default function EditClientPage() {
                                 <FormField control={form.control} name="email" render={({ field }) => (
                                     <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
-                                 <FormField control={form.control} name="telefone" render={({ field }) => (
-                                     <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
-                                 )}/>
+                                <FormField control={form.control} name="telefone" render={({ field }) => (
+                                    <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                )}/>
                              </div>
                          </FormSection>
                         
                         <FormSection title="Endereço">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <FormField control={form.control} name="cep" render={({ field }) => (
-                                     <FormItem className="sm:col-span-1"><FormLabel>CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem className="sm:col-span-1"><FormLabel>CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                  <FormField control={form.control} name="logradouro" render={({ field }) => (
                                     <FormItem className="sm:col-span-2"><FormLabel>Logradouro</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
@@ -253,11 +228,11 @@ export default function EditClientPage() {
                         </FormSection>
 
                         <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao?tab=clients')} disabled={saving}>
+                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/fornecedores')} disabled={saving}>
                                 Cancelar
                             </Button>
                             <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                                {saving ? 'Salvando...' : 'Salvar Alterações'}
+                                {saving ? 'Salvando...' : 'Salvar Fornecedor'}
                             </Button>
                         </div>
                     </form>
