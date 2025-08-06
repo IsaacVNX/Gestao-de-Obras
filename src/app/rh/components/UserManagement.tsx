@@ -25,7 +25,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from 'next/navigation';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useUserManagement, type Usuario } from '@/hooks/use-user-management';
@@ -40,6 +40,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
+import { NewUserForm } from './NewUserForm';
 
 const getRoleName = (role: string) => {
   switch (role) {
@@ -81,7 +82,8 @@ export function UserManagement() {
     activeTab, 
     setActiveTab, 
     handleToggleStatus,
-    updateUserRole
+    updateUserRole,
+    refetch: refetchUsers,
   } = useUserManagement();
 
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
@@ -92,7 +94,8 @@ export function UserManagement() {
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
   const [currentPage, setCurrentPage] = useState(1);
   const [goToPageInput, setGoToPageInput] = useState('');
-  
+  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+
   const isAdmin = user?.role === 'admin';
   const isGestor = user?.role === 'gestor';
   const canTakeAction = isAdmin || isGestor;
@@ -465,7 +468,7 @@ export function UserManagement() {
         <div className="flex items-center gap-2">
             {canCreateUser && (
                 <Button 
-                    onClick={() => { setIsLoading(true); router.push('/rh/cadastros/usuarios/new')}}
+                    onClick={() => setCreateModalOpen(true)}
                     className="transition-transform duration-200 hover:scale-105"
                 >
                 <PlusCircle className="mr-2 h-4 w-4" />
@@ -531,6 +534,12 @@ export function UserManagement() {
             {renderContent()}
         </div>
       </div>
+
+      <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-4xl">
+            <NewUserForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={refetchUsers} />
+        </DialogContent>
+      </Dialog>
       
       {/* Edit Role Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && handleCloseEditDialog()}>

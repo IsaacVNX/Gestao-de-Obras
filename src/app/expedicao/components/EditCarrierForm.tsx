@@ -1,15 +1,11 @@
 
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useAuth } from '@/hooks/use-auth';
-import AppLayout from '@/components/AppLayout';
 import { Separator } from '@/components/ui/separator';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,12 +13,25 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IMaskInput } from 'react-imask';
 import React from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
-
-const personTypeSchema = z.object({
-  tipoPessoa: z.enum(['juridica', 'fisica']),
-});
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { CardContent } from '@/components/ui/card';
+import type { Transportadora } from './CarrierManagement';
+import { X, AlertTriangle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from '@/components/ui/skeleton';
 
 const baseSchema = z.object({
     inscricaoEstadual: z.string().optional(),
@@ -31,8 +40,8 @@ const baseSchema = z.object({
         const digits = val.replace(/\D/g, '');
         return digits.length === 10 || digits.length === 11;
     }, "Telefone deve ter 10 ou 11 dígitos."),
+    status: z.enum(['ativo', 'inativo']),
     
-    // Endereço
     cep: z.string().min(1, "O CEP é obrigatório.").refine(val => val.replace(/\D/g, '').length === 8, "CEP deve ter 8 dígitos."),
     logradouro: z.string().min(1, "O logradouro é obrigatório."),
     numero: z.string().min(1, "O número é obrigatório."),
@@ -41,7 +50,6 @@ const baseSchema = z.object({
     cidade: z.string().min(1, "A cidade é obrigatória."),
     estado: z.string().min(1, "O estado é obrigatório."),
 
-    // Contato
     responsavel: z.string().optional(),
     responsavelEmail: z.string().email("E-mail do responsável inválido.").optional().or(z.literal('')),
     responsavelTelefone: z.string().optional(),
@@ -66,7 +74,6 @@ const carrierSchema = z.discriminatedUnion("tipoPessoa", [
     }).merge(baseSchema),
 ]);
 
-
 const FormSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <>
         <Separator className="my-6" />
@@ -89,104 +96,105 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 );
 MaskedInput.displayName = "MaskedInput";
 
+interface EditCarrierFormProps {
+    carrier: Transportadora;
+    setOpen: (open: boolean) => void;
+    onSaveSuccess: () => void;
+}
 
-export default function NewCarrierPage() {
-    const { user } = useAuth();
-    const router = useRouter();
+function CarrierFormContent({ carrier, onSaveSuccess, setOpen }: { carrier: Transportadora, onSaveSuccess: () => void, setOpen: (open: boolean) => void }) {
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
+    const [isAlertOpen, setAlertOpen] = useState(false);
+    const [isClosing, setIsClosing] = useState(false);
 
     const form = useForm<z.infer<typeof carrierSchema>>({
         resolver: zodResolver(carrierSchema),
         defaultValues: {
-            tipoPessoa: 'juridica',
-            razaoSocial: '',
-            nomeFantasia: '',
-            cnpj: '',
-            nomeCompleto: '',
-            cpf: '',
-            inscricaoEstadual: '',
-            email: '',
-            telefone: '',
-            cep: '',
-            logradouro: '',
-            numero: '',
-            complemento: '',
-            bairro: '',
-            cidade: '',
-            estado: '',
-            responsavel: '',
-            responsavelEmail: '',
-            responsavelTelefone: '',
+            ...carrier,
+            tipoPessoa: carrier.tipoPessoa || 'juridica',
         },
     });
 
+    const { formState: { isDirty }, reset } = form;
+
+    const handleClose = () => {
+        setIsClosing(true);
+        setTimeout(() => {
+            setOpen(false);
+        }, 500); 
+    };
+    
+    const handleAttemptClose = () => {
+        if (isDirty) {
+            setAlertOpen(true);
+        } else {
+            handleClose();
+        }
+    };
+
     const tipoPessoa = form.watch('tipoPessoa');
 
-    const handleCreate = async (formData: z.infer<typeof carrierSchema>) => {
+    const handleUpdate = async (formData: z.infer<typeof carrierSchema>) => {
         setSaving(true);
-        const identifier = (formData.tipoPessoa === 'juridica' ? formData.cnpj : formData.cpf)?.replace(/\D/g, '') || '';
-        
-        if (!identifier) {
-             toast({ variant: 'destructive', title: 'Erro de Criação', description: 'CNPJ ou CPF deve ser preenchido.' });
-             setSaving(false);
-             return;
-        }
-
         try {
-            const fieldToCheck = formData.tipoPessoa === 'juridica' ? 'cnpj' : 'cpf';
-            const q = query(collection(db, 'transportadoras'), where(fieldToCheck, '==', identifier));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                toast({ variant: 'destructive', title: 'Erro de Criação', description: `Este ${fieldToCheck.toUpperCase()} já está cadastrado.` });
-                setSaving(false);
-                return;
-            }
-
-            const docRef = doc(db, 'transportadoras', identifier);
-            await setDoc(docRef, {
+            const dataToUpdate = {
                 ...formData,
                 cnpj: formData.cnpj?.replace(/\D/g, '') || '',
                 cpf: formData.cpf?.replace(/\D/g, '') || '',
-                status: 'ativo',
-            });
+            };
+
+            const docRef = doc(db, 'transportadoras', carrier.id);
+            await updateDoc(docRef, dataToUpdate);
             
-            toast({ title: 'Transportadora Criada!', description: 'A nova transportadora foi adicionada com sucesso.' });
-            router.push('/expedicao/cadastros/transportadoras');
+            toast({ title: 'Transportadora Atualizada!', description: 'Os dados foram atualizados com sucesso.' });
+            onSaveSuccess();
+            handleClose();
 
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar a transportadora.' });
+            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar os dados.' });
         } finally {
             setSaving(false);
         }
     };
-
-    if (!user || (user.role !== 'admin' && user.role !== 'gestor')) {
-        return (
-            <AppLayout>
-                <Card className="max-w-2xl mx-auto">
-                    <CardHeader>
-                        <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para criar novas transportadoras.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button onClick={() => router.back()}>Voltar</Button>
-                    </CardContent>
-                </Card>
-            </AppLayout>
-        );
-    }
-
+    
     return (
-        <AppLayout>
-            <Card className="max-w-4xl mx-auto">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Adicionar Nova Transportadora</CardTitle>
-                    <CardDescription className="text-card-foreground">Preencha os detalhes abaixo.</CardDescription>
-                </CardHeader>
-                <CardContent>
+        <div 
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); handleAttemptClose(); } }}
+            className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}
+        >
+            <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                           <AlertTriangle className="text-destructive" /> Descartar alterações?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                            Descartar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <DialogHeader className="p-6 flex-row items-center justify-between">
+                <div>
+                    <DialogTitle className="text-2xl">Editar Transportadora</DialogTitle>
+                    <DialogDescription>Modifique os detalhes abaixo.</DialogDescription>
+                </div>
+                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
+                    <X className="h-5 w-5" />
+                </Button>
+            </DialogHeader>
+            <ScrollArea className="flex-grow h-[calc(100%-160px)]">
+                <CardContent className="p-6">
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreate)}>
+                    <form onSubmit={form.handleSubmit(handleUpdate)}>
                         <FormField
                             control={form.control}
                             name="tipoPessoa"
@@ -195,17 +203,24 @@ export default function NewCarrierPage() {
                                     <FormLabel>Tipo de Pessoa</FormLabel>
                                     <FormControl>
                                         <RadioGroup
-                                            onValueChange={field.onChange}
+                                            onValueChange={(value) => {
+                                                field.onChange(value);
+                                                form.setValue('cnpj', '');
+                                                form.setValue('cpf', '');
+                                                form.setValue('razaoSocial', '');
+                                                form.setValue('nomeFantasia', '');
+                                                form.setValue('nomeCompleto', '');
+                                            }}
                                             defaultValue={field.value}
                                             className="grid grid-cols-2 gap-4"
                                             disabled={saving}
                                         >
                                             <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-4 transition-colors", field.value === 'juridica' && 'bg-accent text-accent-foreground')}>
-                                                <FormControl><RadioGroupItem value="juridica" id="juridica" className={cn(field.value === 'juridica' && 'border-white text-white')}/></FormControl>
+                                                <FormControl><RadioGroupItem value="juridica" id="juridica" className={cn(field.value === 'juridica' && 'border-white text-white')} /></FormControl>
                                                 <FormLabel htmlFor="juridica" className="cursor-pointer font-bold text-base">Pessoa Jurídica</FormLabel>
                                             </FormItem>
                                             <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-4 transition-colors", field.value === 'fisica' && 'bg-accent text-accent-foreground')}>
-                                                <FormControl><RadioGroupItem value="fisica" id="fisica" className={cn(field.value === 'fisica' && 'border-white text-white')}/></FormControl>
+                                                <FormControl><RadioGroupItem value="fisica" id="fisica" className={cn(field.value === 'fisica' && 'border-white text-white')} /></FormControl>
                                                 <FormLabel htmlFor="fisica" className="cursor-pointer font-bold text-base">Pessoa Física</FormLabel>
                                             </FormItem>
                                         </RadioGroup>
@@ -214,9 +229,8 @@ export default function NewCarrierPage() {
                                 </FormItem>
                             )}
                         />
-
-                         <FormSection title="Dados da Empresa">
-                             {tipoPessoa === 'juridica' ? (
+                        <FormSection title="Dados da Empresa">
+                            {tipoPessoa === 'juridica' ? (
                                 <>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="razaoSocial" render={({ field }) => (
@@ -225,43 +239,58 @@ export default function NewCarrierPage() {
                                         <FormField control={form.control} name="nomeFantasia" render={({ field }) => (
                                             <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                         )}/>
-                                     </div>
-                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                         <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                            <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                            <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
                                         )}/>
                                         <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
                                             <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                         )}/>
-                                     </div>
+                                    </div>
                                 </>
-                             ) : (
+                            ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="nomeCompleto" render={({ field }) => (
                                         <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="cpf" render={({ field }) => (
-                                        <FormItem><FormLabel>CPF</FormLabel><FormControl><MaskedInput {...field} mask="000.000.000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>CPF</FormLabel><FormControl><MaskedInput {...field} mask="000.000.000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
-                             )}
+                            )}
 
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="email" render={({ field }) => (
                                     <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="telefone" render={({ field }) => (
                                     <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
-                             </div>
-                         </FormSection>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <FormField control={form.control} name="status" render={({ field }) => (
+                                    <FormItem><FormLabel>Status</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={saving}>
+                                            <FormControl>
+                                                <SelectTrigger className="text-black"><SelectValue placeholder="Selecione um status" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="ativo">Ativo</SelectItem>
+                                                <SelectItem value="inativo">Inativo</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    <FormMessage /></FormItem>
+                                )}/>
+                            </div>
+                        </FormSection>
                         
                         <FormSection title="Endereço">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <FormField control={form.control} name="cep" render={({ field }) => (
                                     <FormItem className="sm:col-span-1"><FormLabel>CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
-                                 <FormField control={form.control} name="logradouro" render={({ field }) => (
+                                <FormField control={form.control} name="logradouro" render={({ field }) => (
                                     <FormItem className="sm:col-span-2"><FormLabel>Logradouro</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                             </div>
@@ -276,7 +305,7 @@ export default function NewCarrierPage() {
                                     <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="cidade" render={({ field }) => (
                                     <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
@@ -285,10 +314,10 @@ export default function NewCarrierPage() {
                                 )}/>
                             </div>
                         </FormSection>
-                         
-                         <FormSection title="Contato">
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                 <FormField control={form.control} name="responsavel" render={({ field }) => (
+                        
+                        <FormSection title="Contato">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <FormField control={form.control} name="responsavel" render={({ field }) => (
                                     <FormItem><FormLabel>Nome do Responsável</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="responsavelEmail" render={({ field }) => (
@@ -299,19 +328,68 @@ export default function NewCarrierPage() {
                                 )}/>
                             </div>
                         </FormSection>
-
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/transportadoras')} disabled={saving}>
-                                Cancelar
-                            </Button>
-                            <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                                {saving ? 'Salvando...' : 'Salvar Transportadora'}
-                            </Button>
-                        </div>
                     </form>
                     </Form>
                 </CardContent>
-            </Card>
-        </AppLayout>
+            </ScrollArea>
+            <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
+                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                    Cancelar
+                </Button>
+                <Button type="button" onClick={form.handleSubmit(handleUpdate)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
+                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                </Button>
+            </div>
+        </div>
     );
+}
+
+export function EditCarrierForm(props: EditCarrierFormProps) {
+    const { carrier, ...rest } = props;
+    const { toast } = useToast();
+    const [fetchedCarrier, setFetchedCarrier] = useState<Transportadora | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchCarrierData() {
+            setLoading(true);
+            try {
+                const docRef = doc(db, 'transportadoras', carrier.id);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setFetchedCarrier({ id: docSnap.id, ...docSnap.data() } as Transportadora);
+                } else {
+                    toast({ variant: 'destructive', title: 'Erro', description: 'Transportadora não encontrada.' });
+                    props.setOpen(false);
+                }
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados.' });
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        fetchCarrierData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [carrier.id]);
+
+    if (loading || !fetchedCarrier) {
+        return (
+            <div className="p-6 h-full w-full bg-card">
+                 <DialogHeader className="p-6 flex-row items-center justify-between">
+                    <div>
+                        <DialogTitle className="text-2xl">Editar Transportadora</DialogTitle>
+                        <DialogDescription>Modifique os detalhes abaixo.</DialogDescription>
+                    </div>
+                </DialogHeader>
+                <div className="p-6 flex flex-col space-y-4">
+                    <Skeleton className="h-[20px] w-32 rounded-xl" />
+                    <Skeleton className="h-[20px] w-full rounded-xl" />
+                    <Skeleton className="h-[20px] w-full rounded-xl" />
+                </div>
+            </div>
+        );
+    }
+    
+    return <CarrierFormContent carrier={fetchedCarrier} {...rest} />;
 }

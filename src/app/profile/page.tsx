@@ -337,12 +337,12 @@ export default function ProfilePage() {
                         <FormSection title="Informações Pessoais">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="first-name">Nome</Label>
-                                    <Input id="first-name" placeholder="João" required value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={saving}/>
+                                    <Label htmlFor="firstName">Nome</Label>
+                                    <Input id="firstName" placeholder="João" required value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={saving}/>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="last-name">Sobrenome</Label>
-                                    <Input id="last-name" placeholder="Silva" required value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={saving}/>
+                                    <Label htmlFor="lastName">Sobrenome</Label>
+                                    <Input id="lastName" placeholder="Silva" required value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={saving}/>
                                 </div>
                             </div>
                             <div className="space-y-2 mt-4">

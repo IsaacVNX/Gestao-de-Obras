@@ -45,49 +45,47 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { NewClientForm } from './NewClientForm';
-import { EditClientForm } from './EditClientForm';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { NewProductForm } from './NewProductForm';
+import { EditProductForm } from './EditProductForm';
 
-export type Cliente = {
+
+export type Produto = {
     id: string;
-    tipoPessoa: 'juridica' | 'fisica';
-    razaoSocial?: string;
-    nomeFantasia?: string;
-    nomeCompleto?: string;
-    cnpj?: string;
-    cpf?: string;
-    telefone: string;
-    email: string;
+    nome: string;
+    sku: string;
+    valor: number;
     status: 'ativo' | 'inativo';
 };
 
 type SortConfig = {
-    key: keyof Cliente | 'nome' | 'documento';
+    key: keyof Produto;
     direction: 'ascending' | 'descending';
 };
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 30, 50, 100];
 
-export function ClientManagement() {
+export function ProductManagement() {
     const { user } = useAuth();
     const router = useRouter();
     const { setIsLoading } = useLoading();
     const { toast } = useToast();
     
-    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [produtos, setProdutos] = useState<Produto[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'ativo' | 'inativo' | 'todos'>('ativo');
-    const [selectedClients, setSelectedClients] = useState<string[]>([]);
+    const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'nome', direction: 'ascending' });
     const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
     
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [editingClient, setEditingClient] = useState<Cliente | null>(null);
+    const [editingProduct, setEditingProduct] = useState<Produto | null>(null);
     const [isClosing, setIsClosing] = useState(false);
+    
+    const canManage = user?.role === 'admin' || user?.role === 'gestor';
 
     const handleOpenCreateModal = () => {
         setCreateModalOpen(true);
@@ -100,127 +98,105 @@ export function ClientManagement() {
             setIsClosing(false);
         }, 500);
     };
-
-    const handleOpenEditModal = (client: Cliente) => {
-        setEditingClient(client);
+    
+    const handleOpenEditModal = (product: Produto) => {
+        setEditingProduct(product);
     };
 
     const handleCloseEditModal = () => {
-        setEditingClient(null);
+        setEditingProduct(null);
     };
 
-    const canManageClients = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
-
-    const fetchClients = async () => {
+    const fetchProducts = async () => {
         setLoading(true);
         try {
-            const clientsSnapshot = await getDocs(collection(db, 'clientes'));
-            const clientsList = clientsSnapshot.docs.map(doc => {
+            const productsSnapshot = await getDocs(collection(db, 'produtos'));
+            const productsList = productsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
                     id: doc.id, 
                     status: data.status || 'ativo',
-                    tipoPessoa: data.tipoPessoa || 'juridica',
                     ...data 
-                } as Cliente;
+                } as Produto;
             });
-            setClientes(clientsList);
+            setProdutos(productsList);
         } catch (error) {
-            console.error("Erro ao buscar clientes:", error);
-            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os clientes.' });
+            console.error("Erro ao buscar produtos:", error);
+            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os produtos.' });
         } finally {
             setLoading(false);
         }
     }
 
     useEffect(() => {
-        fetchClients();
+        fetchProducts();
     }, [toast]);
     
-    const handleDeleteClient = async (clientId: string) => {
+    const handleDelete = async (productId: string) => {
         try {
-            await deleteDoc(doc(db, 'clientes', clientId));
-            setClientes(prev => prev.filter(c => c.id !== clientId));
-            setSelectedClients(prev => prev.filter(id => id !== clientId));
-            toast({ title: 'Cliente Excluído', description: 'O cliente foi removido com sucesso.' });
+            await deleteDoc(doc(db, 'produtos', productId));
+            setProdutos(prev => prev.filter(p => p.id !== productId));
+            setSelectedProducts(prev => prev.filter(id => id !== productId));
+            toast({ title: 'Produto Excluído', description: 'O produto foi removido com sucesso.' });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o produto.' });
         }
     };
     
-    const handleToggleStatus = async (clientIds: string[], newStatus: 'ativo' | 'inativo') => {
+    const handleToggleStatus = async (productIds: string[], newStatus: 'ativo' | 'inativo') => {
         const batch = writeBatch(db);
-        clientIds.forEach(id => {
-            const clientRef = doc(db, 'clientes', id);
-            batch.update(clientRef, { status: newStatus });
+        productIds.forEach(id => {
+            const productRef = doc(db, 'produtos', id);
+            batch.update(productRef, { status: newStatus });
         });
 
         try {
             await batch.commit();
-            setClientes(prev => prev.map(c => clientIds.includes(c.id) ? { ...c, status: newStatus } : c));
-            setSelectedClients([]);
-            toast({ title: 'Status Atualizado', description: `Cliente(s) foram marcados como ${newStatus === 'ativo' ? 'ativos' : 'inativos'}.` });
+            setProdutos(prev => prev.map(p => productIds.includes(p.id) ? { ...p, status: newStatus } : p));
+            setSelectedProducts([]);
+            toast({ title: 'Status Atualizado', description: `Produto(s) foram marcados como ${newStatus === 'ativo' ? 'ativos' : 'inativos'}.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status do(s) cliente(s).' });
+            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status do(s) produto(s).' });
         }
     };
 
     const handleBulkDelete = async () => {
         const batch = writeBatch(db);
-        selectedClients.forEach(id => {
-            batch.delete(doc(db, 'clientes', id));
+        selectedProducts.forEach(id => {
+            batch.delete(doc(db, 'produtos', id));
         });
 
         try {
             await batch.commit();
-            setClientes(prev => prev.filter(c => !selectedClients.includes(c.id)));
-            setSelectedClients([]);
-            toast({ title: 'Clientes Excluídos', description: `${selectedClients.length} clientes foram removidos com sucesso.` });
+            setProdutos(prev => prev.filter(p => !selectedProducts.includes(p.id)));
+            setSelectedProducts([]);
+            toast({ title: 'Produtos Excluídos', description: `${selectedProducts.length} produtos foram removidos com sucesso.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover os clientes selecionados.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover os produtos selecionados.' });
         }
     };
 
-    const filteredAndSortedClients = useMemo(() => {
-        let filtered = clientes;
+    const filteredAndSortedProducts = useMemo(() => {
+        let filtered = produtos;
 
         if (activeTab !== 'todos') {
-            filtered = filtered.filter(c => c.status === activeTab);
+            filtered = filtered.filter(p => p.status === activeTab);
         }
 
         if (searchTerm) {
             const lowerCaseTerm = searchTerm.toLowerCase();
-            filtered = filtered.filter(c => {
-                const nome = c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto;
-                const documento = c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf;
-                return (nome && nome.toLowerCase().includes(lowerCaseTerm)) ||
-                       (documento && documento.includes(lowerCaseTerm)) ||
-                       (c.nomeFantasia && c.nomeFantasia.toLowerCase().includes(lowerCaseTerm));
-            });
+            filtered = filtered.filter(p => 
+                p.nome.toLowerCase().includes(lowerCaseTerm) ||
+                p.sku.toLowerCase().includes(lowerCaseTerm)
+            );
         }
         
         if (sortConfig !== null) {
             filtered.sort((a, b) => {
-                let aValue, bValue;
-
-                if (sortConfig.key === 'nome') {
-                    aValue = a.tipoPessoa === 'juridica' ? a.razaoSocial : a.nomeCompleto;
-                    bValue = b.tipoPessoa === 'juridica' ? b.razaoSocial : b.nomeCompleto;
-                } else if (sortConfig.key === 'documento') {
-                    aValue = a.tipoPessoa === 'juridica' ? a.cnpj : a.cpf;
-                    bValue = b.tipoPessoa === 'juridica' ? b.cnpj : b.cpf;
-                } else {
-                    aValue = a[sortConfig.key as keyof Cliente];
-                    bValue = b[sortConfig.key as keyof Cliente];
-                }
-
-                if (aValue === undefined || aValue === null) return 1;
-                if (bValue === undefined || bValue === null) return -1;
-
-                if (String(aValue).toLowerCase() < String(bValue).toLowerCase()) {
+                if (a[sortConfig.key] < b[sortConfig.key]) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
                 }
-                if (String(aValue).toLowerCase() > String(bValue).toLowerCase()) {
+                if (a[sortConfig.key] > b[sortConfig.key]) {
                     return sortConfig.direction === 'ascending' ? 1 : -1;
                 }
                 return 0;
@@ -228,9 +204,9 @@ export function ClientManagement() {
         }
         
         return filtered;
-    }, [clientes, activeTab, searchTerm, sortConfig]);
+    }, [produtos, activeTab, searchTerm, sortConfig]);
 
-    const requestSort = (key: keyof Cliente | 'nome' | 'documento') => {
+    const requestSort = (key: keyof Produto) => {
         let direction: 'ascending' | 'descending' = 'ascending';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
             direction = 'descending';
@@ -238,55 +214,57 @@ export function ClientManagement() {
         setSortConfig({ key, direction });
     };
 
-    const getSortIcon = (key: keyof Cliente | 'nome' | 'documento') => {
+    const getSortIcon = (key: keyof Produto) => {
         if (!sortConfig || sortConfig.key !== key) {
             return <ArrowUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />;
         }
         return sortConfig.direction === 'ascending' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
     };
     
-    const clientCounts = useMemo(() => {
+    const counts = useMemo(() => {
         return {
-            ativo: clientes.filter(c => c.status === 'ativo').length,
-            inativo: clientes.filter(c => c.status === 'inativo').length,
-            todos: clientes.length,
+            ativo: produtos.filter(p => p.status === 'ativo').length,
+            inativo: produtos.filter(p => p.status === 'inativo').length,
+            todos: produtos.length,
         }
-    }, [clientes]);
+    }, [produtos]);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedClients(filteredAndSortedClients.map(c => c.id));
+            setSelectedProducts(filteredAndSortedProducts.map(p => p.id));
         } else {
-            setSelectedClients([]);
+            setSelectedProducts([]);
         }
     };
     
-    const handleSelectClient = (id: string, checked: boolean) => {
+    const handleSelect = (id: string, checked: boolean) => {
         if (checked) {
-            setSelectedClients(prev => [...prev, id]);
+            setSelectedProducts(prev => [...prev, id]);
         } else {
-            setSelectedClients(prev => prev.filter(clientId => clientId !== id));
+            setSelectedProducts(prev => prev.filter(productId => productId !== id));
         }
     };
 
-    const isAllSelected = selectedClients.length > 0 && selectedClients.length === filteredAndSortedClients.length;
+    const isAllSelected = selectedProducts.length > 0 && selectedProducts.length === filteredAndSortedProducts.length;
 
-    const totalPages = Math.ceil(filteredAndSortedClients.length / itemsPerPage);
-    const paginatedClients = filteredAndSortedClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const totalPages = Math.ceil(filteredAndSortedProducts.length / itemsPerPage);
+    const paginatedProducts = filteredAndSortedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+    const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    };
 
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
-        const tableData = filteredAndSortedClients.map(c => [
-            c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
-            c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
-            c.email,
-            c.telefone,
-            c.status,
+        const tableData = filteredAndSortedProducts.map(p => [
+            p.nome,
+            p.sku,
+            formatCurrency(p.valor),
+            p.status,
         ]);
 
         autoTable(doc, {
-            head: [['Nome/Razão Social', 'CPF/CNPJ', 'E-mail', 'Telefone', 'Situação']],
+            head: [['Produto', 'SKU', 'Valor', 'Situação']],
             body: tableData,
             didDrawPage: (data) => {
                 doc.setFontSize(16);
@@ -309,34 +287,32 @@ export function ClientManagement() {
             margin: { top: 30 },
         });
 
-        if (action === 'save') {
-            doc.save('relatorio_clientes.pdf');
-        } else {
+        if (action === 'print') {
             doc.output('dataurlnewwindow');
+        } else {
+            doc.save('relatorio_produtos.pdf');
         }
     };
 
     const handlePrint = () => {
-        generatePDF('Relatório de Clientes', 'print');
+        generatePDF('Relatório de Produtos', 'print');
     };
 
     const handleExportPDF = () => {
-        generatePDF('Relatório de Clientes', 'save');
+        generatePDF('Relatório de Produtos', 'save');
     };
 
-
     const handleExportExcel = () => {
-        const dataToExport = filteredAndSortedClients.map(c => ({
-            "Nome/Razão Social": c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
-            "CPF/CNPJ": c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
-            "Email": c.email,
-            "Telefone": c.telefone,
-            "Status": c.status,
+        const dataToExport = filteredAndSortedProducts.map(p => ({
+            "Produto": p.nome,
+            "SKU": p.sku,
+            "Valor": p.valor,
+            "Status": p.status,
         }));
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Clientes');
-        XLSX.writeFile(workbook, 'relatorio_clientes.xlsx');
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Produtos');
+        XLSX.writeFile(workbook, 'relatorio_produtos.xlsx');
     };
 
     const showDevelopmentToast = () => {
@@ -365,7 +341,7 @@ export function ClientManagement() {
                         className="transition-transform duration-200 hover:scale-105"
                     >
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Novo Cliente
+                        Novo Produto
                     </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -382,7 +358,7 @@ export function ClientManagement() {
                             <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                            <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar Clientes</DropdownMenuItem>
+                            <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar</DropdownMenuItem>
                             <DropdownMenuItem onClick={showDevelopmentToast}><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -392,7 +368,7 @@ export function ClientManagement() {
                     <CardContent className="p-4 space-y-4">
                         <div className="relative flex-grow">
                             <Input 
-                                placeholder="Pesquisar por nome, razão social, CPF ou CNPJ..."
+                                placeholder="Pesquisar por produto ou SKU"
                                 className="pl-4 pr-10 bg-white border-gray-300 text-black"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -402,36 +378,36 @@ export function ClientManagement() {
 
                         <div className="grid grid-cols-3 text-center border-b">
                             <button onClick={() => setActiveTab('ativo')} className={cn("py-3 relative text-black", activeTab === 'ativo' && "font-semibold")}>
-                                Ativo <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.ativo}</Badge>
+                                Ativo <Badge className="ml-2 bg-gray-200 text-black">{counts.ativo}</Badge>
                                 {activeTab === 'ativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
                             </button>
                             <button onClick={() => setActiveTab('inativo')} className={cn("py-3 relative text-black", activeTab === 'inativo' && "font-semibold")}>
-                                Inativo <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.inativo}</Badge>
+                                Inativo <Badge className="ml-2 bg-gray-200 text-black">{counts.inativo}</Badge>
                                 {activeTab === 'inativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
                             </button>
                             <button onClick={() => setActiveTab('todos')} className={cn("py-3 relative text-black", activeTab === 'todos' && "font-semibold")}>
-                                Todos <Badge className="ml-2 bg-gray-200 text-black">{clientCounts.todos}</Badge>
+                                Todos <Badge className="ml-2 bg-gray-200 text-black">{counts.todos}</Badge>
                                 {activeTab === 'todos' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
                             </button>
                         </div>
 
-                        {canManageClients && selectedClients.length > 1 && (
+                        {canManage && selectedProducts.length > 1 && (
                             <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
-                                <span className="text-sm text-black">{selectedClients.length} registro(s) selecionado(s)</span>
+                                <span className="text-sm text-black">{selectedProducts.length} registro(s) selecionado(s)</span>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button variant="link" className="p-0 h-auto text-sm text-destructive">Excluir</Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
-                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedClients.length} cliente(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
+                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedProducts.length} produto(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
                                         <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleBulkDelete}>Confirmar</AlertDialogAction></AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
                                 {activeTab === 'ativo' && (
-                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedClients, 'inativo')}>Inativar</Button>
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedProducts, 'inativo')}>Inativar</Button>
                                 )}
                                 {activeTab === 'inativo' && (
-                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedClients, 'ativo')}>Reativar</Button>
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedProducts, 'ativo')}>Reativar</Button>
                                 )}
                             </div>
                         )}
@@ -443,48 +419,46 @@ export function ClientManagement() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManageClients} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('documento')}>CPF/CNPJ {getSortIcon('documento')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
+                                    <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Produto {getSortIcon('nome')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('sku')}>SKU {getSortIcon('sku')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('valor')}>Valor {getSortIcon('valor')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManageClients && <TableHead className="text-right text-black">Ações</TableHead>}
+                                    {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     [...Array(5)].map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={canManageClients ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
+                                            <TableCell colSpan={canManage ? 6 : 5}><Skeleton className="h-6 w-full" /></TableCell>
                                         </TableRow>
                                     ))
-                                ) : paginatedClients.length > 0 ? (
-                                    paginatedClients.map(client => (
-                                        <TableRow key={client.id}>
-                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManageClients} checked={selectedClients.includes(client.id)} onCheckedChange={(checked) => handleSelectClient(client.id, !!checked)} /></TableCell>
-                                            <TableCell className="font-medium text-black">{client.tipoPessoa === 'juridica' ? client.razaoSocial : client.nomeCompleto}</TableCell>
-                                            <TableCell className="text-black">{client.tipoPessoa === 'juridica' ? client.cnpj : client.cpf}</TableCell>
-                                            <TableCell className="text-black">{client.email}</TableCell>
-                                            <TableCell className="text-black">{client.telefone}</TableCell>
+                                ) : paginatedProducts.length > 0 ? (
+                                    paginatedProducts.map(product => (
+                                        <TableRow key={product.id}>
+                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedProducts.includes(product.id)} onCheckedChange={(checked) => handleSelect(product.id, !!checked)} /></TableCell>
+                                            <TableCell className="font-medium text-black">{product.nome}</TableCell>
+                                            <TableCell className="text-black">{product.sku}</TableCell>
+                                            <TableCell className="text-black">{formatCurrency(product.valor)}</TableCell>
                                             <TableCell>
-                                                <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className={cn(client.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{client.status}</Badge>
+                                                <Badge variant={product.status === 'ativo' ? 'default' : 'secondary'} className={cn(product.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{product.status}</Badge>
                                             </TableCell>
-                                            {canManageClients && (
+                                            {canManage && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(client)}>
+                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(product)}>
                                                             <Edit className="mr-2 h-4 w-4" /> Editar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
-                                                        {client.status === 'ativo' ? (
-                                                            <DropdownMenuItem onClick={() => handleToggleStatus([client.id], 'inativo')}>
+                                                        {product.status === 'ativo' ? (
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([product.id], 'inativo')}>
                                                                 <UserX className="mr-2 h-4 w-4" /> Inativar
                                                             </DropdownMenuItem>
                                                         ) : (
-                                                            <DropdownMenuItem onClick={() => handleToggleStatus([client.id], 'ativo')}>
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([product.id], 'ativo')}>
                                                                 <UserCheck className="mr-2 h-4 w-4" /> Reativar
                                                             </DropdownMenuItem>
                                                         )}
@@ -498,12 +472,12 @@ export function ClientManagement() {
                                                                 <AlertDialogHeader>
                                                                     <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                                                     <AlertDialogDescription>
-                                                                        Tem certeza que deseja excluir o cliente "{client.tipoPessoa === 'juridica' ? client.razaoSocial : client.nomeCompleto}"? Esta ação é permanente.
+                                                                        Tem certeza que deseja excluir o produto "{product.nome}"? Esta ação é permanente.
                                                                     </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDeleteClient(client.id)}>Confirmar</AlertDialogAction>
+                                                                    <AlertDialogAction onClick={() => handleDelete(product.id)}>Confirmar</AlertDialogAction>
                                                                 </AlertDialogFooter>
                                                             </AlertDialogContent>
                                                         </AlertDialog>
@@ -515,7 +489,7 @@ export function ClientManagement() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={canManageClients ? 7 : 6} className="text-center h-24 text-black">Nenhum cliente encontrado.</TableCell>
+                                        <TableCell colSpan={canManage ? 6 : 5} className="text-center h-24 text-black">Nenhum produto encontrado.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
@@ -543,7 +517,7 @@ export function ClientManagement() {
                                 <span>Registros por página</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedClients.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedClients.length)} de {filteredAndSortedClients.length} registros</span>
+                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedProducts.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedProducts.length)} de {filteredAndSortedProducts.length} registros</span>
                                 <div className="flex items-center gap-1">
                                     <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
                                     <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>
@@ -567,23 +541,23 @@ export function ClientManagement() {
                 </Card>
             </div>
             
-             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
+            <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
                 <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                    <NewClientForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchClients} isClosing={isClosing} handleClose={handleCloseCreateModal} />
+                    <NewProductForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchProducts} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
-
-            {editingClient && (
-                 <Dialog open={!!editingClient} onOpenChange={(open) => !open && handleCloseEditModal()}>
+            
+            {editingProduct && (
+                <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) handleCloseEditModal(); }}>
                     <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                       <EditClientForm 
-                           client={editingClient}
-                           setOpen={(open) => !open && handleCloseEditModal()} 
-                           onSaveSuccess={() => {
-                               fetchClients();
-                               handleCloseEditModal();
-                           }}
-                       />
+                        <EditProductForm 
+                            product={editingProduct}
+                            setOpen={(open) => !open && handleCloseEditModal()} 
+                            onSaveSuccess={() => {
+                                fetchProducts();
+                                handleCloseEditModal();
+                            }}
+                        />
                     </DialogContent>
                 </Dialog>
             )}

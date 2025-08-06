@@ -1,15 +1,11 @@
 
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useAuth } from '@/hooks/use-auth';
-import AppLayout from '@/components/AppLayout';
 import { Separator } from '@/components/ui/separator';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +15,20 @@ import { IMaskInput } from 'react-imask';
 import React from 'react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { CardContent } from '@/components/ui/card';
+import { X, AlertTriangle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const baseSchema = z.object({
     inscricaoEstadual: z.string().optional(),
@@ -43,7 +53,7 @@ const baseSchema = z.object({
     responsavelTelefone: z.string().optional(),
 });
 
-const clientSchema = z.discriminatedUnion("tipoPessoa", [
+const carrierSchema = z.discriminatedUnion("tipoPessoa", [
     z.object({
         tipoPessoa: z.literal('juridica'),
         razaoSocial: z.string().min(1, "A razão social é obrigatória."),
@@ -85,15 +95,21 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 );
 MaskedInput.displayName = "MaskedInput";
 
+interface NewCarrierFormProps {
+    open: boolean;
+    setOpen: (open: boolean) => void;
+    onSaveSuccess: () => void;
+    isClosing: boolean;
+    handleClose: () => void;
+}
 
-export default function NewClientPage() {
-    const { user } = useAuth();
-    const router = useRouter();
+export function NewCarrierForm({ open, setOpen, onSaveSuccess, isClosing, handleClose }: NewCarrierFormProps) {
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
+    const [isAlertOpen, setAlertOpen] = useState(false);
 
-    const form = useForm<z.infer<typeof clientSchema>>({
-        resolver: zodResolver(clientSchema),
+    const form = useForm<z.infer<typeof carrierSchema>>({
+        resolver: zodResolver(carrierSchema),
         defaultValues: {
             tipoPessoa: 'juridica',
             razaoSocial: '',
@@ -116,10 +132,20 @@ export default function NewClientPage() {
             responsavelTelefone: '',
         },
     });
-    
+
+    const { formState: { isDirty } } = form;
+
+    const handleAttemptClose = () => {
+        if (isDirty) {
+            setAlertOpen(true);
+        } else {
+            handleClose();
+        }
+    };
+
     const tipoPessoa = form.watch('tipoPessoa');
 
-    const handleCreateClient = async (formData: z.infer<typeof clientSchema>) => {
+    const handleCreate = async (formData: z.infer<typeof carrierSchema>) => {
         setSaving(true);
         const identifier = (formData.tipoPessoa === 'juridica' ? formData.cnpj : formData.cpf)?.replace(/\D/g, '') || '';
         
@@ -131,7 +157,7 @@ export default function NewClientPage() {
 
         try {
             const fieldToCheck = formData.tipoPessoa === 'juridica' ? 'cnpj' : 'cpf';
-            const q = query(collection(db, 'clientes'), where(fieldToCheck, '==', identifier));
+            const q = query(collection(db, 'transportadoras'), where(fieldToCheck, '==', identifier));
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 toast({ variant: 'destructive', title: 'Erro de Criação', description: `Este ${fieldToCheck.toUpperCase()} já está cadastrado.` });
@@ -139,7 +165,7 @@ export default function NewClientPage() {
                 return;
             }
 
-            const docRef = doc(db, 'clientes', identifier);
+            const docRef = doc(db, 'transportadoras', identifier);
             await setDoc(docRef, {
                 ...formData,
                 cnpj: formData.cnpj?.replace(/\D/g, '') || '',
@@ -147,43 +173,65 @@ export default function NewClientPage() {
                 status: 'ativo',
             });
             
-            toast({ title: 'Cliente Criado!', description: 'O novo cliente foi adicionado com sucesso.' });
-            router.push('/expedicao/cadastros/clientes');
+            toast({ title: 'Transportadora Criada!', description: 'A nova transportadora foi adicionada com sucesso.' });
+            onSaveSuccess();
+            handleClose();
 
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar o cliente.' });
+            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar a transportadora.' });
         } finally {
             setSaving(false);
         }
     };
-
-    if (!user || (user.role !== 'admin' && user.role !== 'gestor' && user.role !== 'escritorio')) {
-        return (
-            <AppLayout>
-                <Card className="max-w-2xl mx-auto">
-                    <CardHeader>
-                        <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para criar novos clientes.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button onClick={() => router.back()}>Voltar</Button>
-                    </CardContent>
-                </Card>
-            </AppLayout>
-        );
-    }
+    
+    useEffect(() => {
+        if (!open) {
+            form.reset();
+        }
+    }, [open, form]);
 
     return (
-        <AppLayout>
-            <Card className="max-w-4xl mx-auto">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Adicionar Novo Cliente</CardTitle>
-                    <CardDescription className="text-card-foreground">Preencha os detalhes abaixo para criar um novo cliente.</CardDescription>
-                </CardHeader>
-                <CardContent>
+        <div 
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    handleAttemptClose();
+                }
+            }}
+            className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}
+        >
+            <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                           <AlertTriangle className="text-destructive" /> Descartar alterações?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                            Descartar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <DialogHeader className="p-6 flex-row items-center justify-between">
+                <div>
+                    <DialogTitle className="text-2xl">Adicionar Nova Transportadora</DialogTitle>
+                    <DialogDescription>Preencha os detalhes abaixo.</DialogDescription>
+                </div>
+                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
+                    <X className="h-5 w-5" />
+                </Button>
+            </DialogHeader>
+            <ScrollArea className="flex-grow h-[calc(100%-160px)]">
+                <CardContent className="p-6">
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreateClient)}>
-                         <FormField
+                    <form onSubmit={form.handleSubmit(handleCreate)}>
+                        <FormField
                             control={form.control}
                             name="tipoPessoa"
                             render={({ field }) => (
@@ -191,14 +239,7 @@ export default function NewClientPage() {
                                     <FormLabel>Tipo de Pessoa</FormLabel>
                                     <FormControl>
                                         <RadioGroup
-                                            onValueChange={(value) => {
-                                                field.onChange(value);
-                                                form.setValue('cnpj', '');
-                                                form.setValue('cpf', '');
-                                                form.setValue('razaoSocial', '');
-                                                form.setValue('nomeFantasia', '');
-                                                form.setValue('nomeCompleto', '');
-                                            }}
+                                            onValueChange={field.onChange}
                                             defaultValue={field.value}
                                             className="grid grid-cols-2 gap-4"
                                             disabled={saving}
@@ -302,19 +343,18 @@ export default function NewClientPage() {
                                 )}/>
                             </div>
                         </FormSection>
-
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/clientes')} disabled={saving}>
-                                Cancelar
-                            </Button>
-                            <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                                {saving ? 'Salvando Cliente...' : 'Salvar Cliente'}
-                            </Button>
-                        </div>
                     </form>
                     </Form>
                 </CardContent>
-            </Card>
-        </AppLayout>
+            </ScrollArea>
+             <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
+                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                    Cancelar
+                </Button>
+                <Button type="button" onClick={form.handleSubmit(handleCreate)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
+                    {saving ? 'Salvando...' : 'Salvar Transportadora'}
+                </Button>
+            </div>
+        </div>
     );
 }

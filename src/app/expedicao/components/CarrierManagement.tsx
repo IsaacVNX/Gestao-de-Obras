@@ -23,7 +23,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
@@ -46,6 +45,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { NewCarrierForm } from './NewCarrierForm';
+import { EditCarrierForm } from './EditCarrierForm';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export type Transportadora = {
     id: string;
@@ -82,31 +84,56 @@ export function CarrierManagement() {
     const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
+    const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [editingCarrier, setEditingCarrier] = useState<Transportadora | null>(null);
+
+    const [isClosing, setIsClosing] = useState(false);
+
+    const handleOpenCreateModal = () => {
+        setCreateModalOpen(true);
+    };
+
+    const handleCloseCreateModal = () => {
+        setIsClosing(true);
+        setTimeout(() => {
+            setCreateModalOpen(false);
+            setIsClosing(false);
+        }, 500);
+    };
     
-    const canManage = user?.role === 'admin' || user?.role === 'gestor';
+    const handleOpenEditModal = (carrier: Transportadora) => {
+        setEditingCarrier(carrier);
+    };
+
+    const handleCloseEditModal = () => {
+        setEditingCarrier(null);
+    };
+
+    const canManage = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
+
+    const fetchCarriers = async () => {
+        setLoading(true);
+        try {
+            const carriersSnapshot = await getDocs(collection(db, 'transportadoras'));
+            const carriersList = carriersSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return { 
+                    id: doc.id, 
+                    status: data.status || 'ativo',
+                    tipoPessoa: data.tipoPessoa || 'juridica',
+                    ...data 
+                } as Transportadora;
+            });
+            setTransportadoras(carriersList);
+        } catch (error) {
+            console.error("Erro ao buscar transportadoras:", error);
+            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar as transportadoras.' });
+        } finally {
+            setLoading(false);
+        }
+    }
 
     useEffect(() => {
-        async function fetchCarriers() {
-            setLoading(true);
-            try {
-                const carriersSnapshot = await getDocs(collection(db, 'transportadoras'));
-                const carriersList = carriersSnapshot.docs.map(doc => {
-                    const data = doc.data();
-                    return { 
-                        id: doc.id, 
-                        status: data.status || 'ativo',
-                        tipoPessoa: data.tipoPessoa || 'juridica',
-                        ...data 
-                    } as Transportadora;
-                });
-                setTransportadoras(carriersList);
-            } catch (error) {
-                console.error("Erro ao buscar transportadoras:", error);
-                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar as transportadoras.' });
-            } finally {
-                setLoading(false);
-            }
-        }
         fetchCarriers();
     }, [toast]);
     
@@ -321,213 +348,236 @@ export function CarrierManagement() {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
-                 <Button 
-                    onClick={() => { setIsLoading(true); router.push('/expedicao/cadastros/transportadoras/new')}}
-                    className="transition-transform duration-200 hover:scale-105"
-                 >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Nova Transportadora
-                </Button>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                         <Button variant="outline" className="text-black">Exportar <ChevronDown className="ml-2 h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem onClick={handleExportPDF}>Exportar para PDF</DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleExportExcel}>Exportar para Excel</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                <Button variant="outline" className="text-black" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                     <DropdownMenuContent>
-                        <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar</DropdownMenuItem>
-                        <DropdownMenuItem onClick={showDevelopmentToast}><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+        <>
+            <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                    <Button 
+                        onClick={handleOpenCreateModal}
+                        className="transition-transform duration-200 hover:scale-105"
+                    >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Nova Transportadora
+                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="text-black">Exportar <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem onClick={handleExportPDF}>Exportar para PDF</DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleExportExcel}>Exportar para Excel</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button variant="outline" className="text-black" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="text-black">Mais ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem onClick={showDevelopmentToast}><Upload className="mr-2 h-4 w-4" />Importar</DropdownMenuItem>
+                            <DropdownMenuItem onClick={showDevelopmentToast}><Download className="mr-2 h-4 w-4" />Baixar Modelo</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
 
-            <Card className="bg-[#d1d1d1]">
-                <CardContent className="p-4 space-y-4">
-                    <div className="relative flex-grow">
-                         <Input 
-                            placeholder="Pesquisar por nome, razão social, CPF ou CNPJ"
-                            className="pl-4 pr-10 bg-white border-gray-300 text-black"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    </div>
-
-                    <div className="grid grid-cols-3 text-center border-b">
-                        <button onClick={() => setActiveTab('ativo')} className={cn("py-3 relative text-black", activeTab === 'ativo' && "font-semibold")}>
-                            Ativo <Badge className="ml-2 bg-gray-200 text-black">{counts.ativo}</Badge>
-                            {activeTab === 'ativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
-                        </button>
-                        <button onClick={() => setActiveTab('inativo')} className={cn("py-3 relative text-black", activeTab === 'inativo' && "font-semibold")}>
-                            Inativo <Badge className="ml-2 bg-gray-200 text-black">{counts.inativo}</Badge>
-                             {activeTab === 'inativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
-                        </button>
-                        <button onClick={() => setActiveTab('todos')} className={cn("py-3 relative text-black", activeTab === 'todos' && "font-semibold")}>
-                            Todos <Badge className="ml-2 bg-gray-200 text-black">{counts.todos}</Badge>
-                             {activeTab === 'todos' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
-                        </button>
-                    </div>
-
-                    {canManage && selectedCarriers.length > 1 && (
-                        <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
-                            <span className="text-sm text-black">{selectedCarriers.length} registro(s) selecionado(s)</span>
-                             <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="link" className="p-0 h-auto text-sm text-destructive">Excluir</Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedCarriers.length} transportadora(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleBulkDelete}>Confirmar</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                            {activeTab === 'ativo' && (
-                                <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'inativo')}>Inativar</Button>
-                            )}
-                            {activeTab === 'inativo' && (
-                                <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'ativo')}>Reativar</Button>
-                            )}
+                <Card className="bg-[#d1d1d1]">
+                    <CardContent className="p-4 space-y-4">
+                        <div className="relative flex-grow">
+                            <Input 
+                                placeholder="Pesquisar por nome, razão social, CPF ou CNPJ"
+                                className="pl-4 pr-10 bg-white border-gray-300 text-black"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                         </div>
-                    )}
-                </CardContent>
-            </Card>
 
-            <Card className="bg-[#d1d1d1]">
-                <CardContent className="p-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
-                                <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
-                            </TableRow>
-                        </TableHeader>
-                         <TableBody>
-                            {loading ? (
-                                [...Array(5)].map((_, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell colSpan={canManage ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
-                                    </TableRow>
-                                ))
-                            ) : paginatedCarriers.length > 0 ? (
-                                paginatedCarriers.map(carrier => (
-                                    <TableRow key={carrier.id}>
-                                        <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedCarriers.includes(carrier.id)} onCheckedChange={(checked) => handleSelect(carrier.id, !!checked)} /></TableCell>
-                                        <TableCell className="font-medium text-black">{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}</TableCell>
-                                        <TableCell className="text-black">{carrier.tipoPessoa === 'juridica' ? carrier.cnpj : carrier.cpf}</TableCell>
-                                        <TableCell className="text-black">{carrier.email}</TableCell>
-                                        <TableCell className="text-black">{carrier.telefone}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={carrier.status === 'ativo' ? 'default' : 'secondary'} className={cn(carrier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{carrier.status}</Badge>
-                                        </TableCell>
-                                        {canManage && (
-                                        <TableCell className="text-right">
-                                             <DropdownMenu>
-                                                <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => router.push(`/expedicao/cadastros/transportadoras/edit/${carrier.id}`)}>
-                                                        <Edit className="mr-2 h-4 w-4" /> Editar
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    {carrier.status === 'ativo' ? (
-                                                        <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'inativo')}>
-                                                            <UserX className="mr-2 h-4 w-4" /> Inativar
-                                                        </DropdownMenuItem>
-                                                    ) : (
-                                                        <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'ativo')}>
-                                                            <UserCheck className="mr-2 h-4 w-4" /> Reativar
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                     <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <DropdownMenuItem onSelect={e => e.preventDefault()} className="text-destructive focus:text-destructive">
-                                                                <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                                                            </DropdownMenuItem>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    Tem certeza que deseja excluir a transportadora "{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}"? Esta ação é permanente.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDelete(carrier.id)}>Confirmar</AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                        )}
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhuma transportadora encontrada.</TableCell>
+                        <div className="grid grid-cols-3 text-center border-b">
+                            <button onClick={() => setActiveTab('ativo')} className={cn("py-3 relative text-black", activeTab === 'ativo' && "font-semibold")}>
+                                Ativo <Badge className="ml-2 bg-gray-200 text-black">{counts.ativo}</Badge>
+                                {activeTab === 'ativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+                            </button>
+                            <button onClick={() => setActiveTab('inativo')} className={cn("py-3 relative text-black", activeTab === 'inativo' && "font-semibold")}>
+                                Inativo <Badge className="ml-2 bg-gray-200 text-black">{counts.inativo}</Badge>
+                                {activeTab === 'inativo' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+                            </button>
+                            <button onClick={() => setActiveTab('todos')} className={cn("py-3 relative text-black", activeTab === 'todos' && "font-semibold")}>
+                                Todos <Badge className="ml-2 bg-gray-200 text-black">{counts.todos}</Badge>
+                                {activeTab === 'todos' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+                            </button>
+                        </div>
+
+                        {canManage && selectedCarriers.length > 1 && (
+                            <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
+                                <span className="text-sm text-black">{selectedCarriers.length} registro(s) selecionado(s)</span>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="link" className="p-0 h-auto text-sm text-destructive">Excluir</Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedCarriers.length} transportadora(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
+                                        <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleBulkDelete}>Confirmar</AlertDialogAction></AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                                {activeTab === 'ativo' && (
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'inativo')}>Inativar</Button>
+                                )}
+                                {activeTab === 'inativo' && (
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'ativo')}>Reativar</Button>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-[#d1d1d1]">
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
+                                    {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-                <CardContent className="border-t p-4">
-                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-black">
-                        <div className="flex items-center gap-2">
-                           <Select
-                                value={String(itemsPerPage)}
-                                onValueChange={(value) => {
-                                    setItemsPerPage(Number(value));
-                                    setCurrentPage(1);
-                                }}
-                            >
-                                <SelectTrigger className="w-[80px] bg-white text-black">
-                                    <SelectValue placeholder={itemsPerPage} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {ITEMS_PER_PAGE_OPTIONS.map(option => (
-                                        <SelectItem key={option} value={String(option)}>{option}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <span>Registros por página</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedCarriers.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedCarriers.length)} de {filteredAndSortedCarriers.length} registros</span>
-                            <div className="flex items-center gap-1">
-                                <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
-                                <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>
-                                <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>Próximo</Button>
-                                <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? (
+                                    [...Array(5)].map((_, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell colSpan={canManage ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : paginatedCarriers.length > 0 ? (
+                                    paginatedCarriers.map(carrier => (
+                                        <TableRow key={carrier.id}>
+                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedCarriers.includes(carrier.id)} onCheckedChange={(checked) => handleSelect(carrier.id, !!checked)} /></TableCell>
+                                            <TableCell className="font-medium text-black">{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}</TableCell>
+                                            <TableCell className="text-black">{carrier.tipoPessoa === 'juridica' ? carrier.cnpj : carrier.cpf}</TableCell>
+                                            <TableCell className="text-black">{carrier.email}</TableCell>
+                                            <TableCell className="text-black">{carrier.telefone}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={carrier.status === 'ativo' ? 'default' : 'secondary'} className={cn(carrier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{carrier.status}</Badge>
+                                            </TableCell>
+                                            {canManage && (
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(carrier)}>
+                                                            <Edit className="mr-2 h-4 w-4" /> Editar
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        {carrier.status === 'ativo' ? (
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'inativo')}>
+                                                                <UserX className="mr-2 h-4 w-4" /> Inativar
+                                                            </DropdownMenuItem>
+                                                        ) : (
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'ativo')}>
+                                                                <UserCheck className="mr-2 h-4 w-4" /> Reativar
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <DropdownMenuItem onSelect={e => e.preventDefault()} className="text-destructive focus:text-destructive">
+                                                                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                                                </DropdownMenuItem>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Tem certeza que deseja excluir a transportadora "{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}"? Esta ação é permanente.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDelete(carrier.id)}>Confirmar</AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                            )}
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhuma transportadora encontrada.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    <CardContent className="border-t p-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-black">
+                            <div className="flex items-center gap-2">
+                            <Select
+                                    value={String(itemsPerPage)}
+                                    onValueChange={(value) => {
+                                        setItemsPerPage(Number(value));
+                                        setCurrentPage(1);
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[80px] bg-white text-black">
+                                        <SelectValue placeholder={itemsPerPage} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {ITEMS_PER_PAGE_OPTIONS.map(option => (
+                                            <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <span>Registros por página</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedCarriers.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedCarriers.length)} de {filteredAndSortedCarriers.length} registros</span>
+                                <div className="flex items-center gap-1">
+                                    <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                                    <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>
+                                    <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>Próximo</Button>
+                                    <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span>Ir para página</span>
+                                <Input 
+                                    type="number" 
+                                    className="w-20 bg-white" 
+                                    value={goToPageInput}
+                                    onChange={(e) => setGoToPageInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleGoToPage()}
+                                />
+                                <Button variant="outline" className="bg-white" onClick={handleGoToPage}>Ok</Button>
                             </div>
                         </div>
-                         <div className="flex items-center gap-2">
-                             <span>Ir para página</span>
-                             <Input 
-                                type="number" 
-                                className="w-20 bg-white" 
-                                value={goToPageInput}
-                                onChange={(e) => setGoToPageInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleGoToPage()}
-                            />
-                             <Button variant="outline" className="bg-white" onClick={handleGoToPage}>Ok</Button>
-                         </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            
+            <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
+                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
+                    <NewCarrierForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchCarriers} isClosing={isClosing} handleClose={handleCloseCreateModal}/>
+                </DialogContent>
+            </Dialog>
+
+            {editingCarrier && (
+                <Dialog open={!!editingCarrier} onOpenChange={(open) => !open && handleCloseEditModal()}>
+                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
+                        <EditCarrierForm 
+                            carrier={editingCarrier} 
+                            setOpen={(open) => !open && handleCloseEditModal()} 
+                            onSaveSuccess={() => {
+                                fetchCarriers();
+                                setEditingCarrier(null);
+                            }}
+                        />
+                    </DialogContent>
+                </Dialog>
+            )}
+        </>
     );
 }

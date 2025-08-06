@@ -1,15 +1,11 @@
 
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useAuth } from '@/hooks/use-auth';
-import AppLayout from '@/components/AppLayout';
 import { Separator } from '@/components/ui/separator';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,7 +13,24 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IMaskInput } from 'react-imask';
 import React from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { CardContent } from '@/components/ui/card';
+import type { Fornecedor } from './SupplierManagement';
 import { cn } from '@/lib/utils';
+import { X, AlertTriangle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from '@/components/ui/skeleton';
 
 const supplierSchema = z.object({
     razaoSocial: z.string().min(1, "A razão social é obrigatória."),
@@ -29,8 +42,8 @@ const supplierSchema = z.object({
         const digits = val.replace(/\D/g, '');
         return digits.length === 10 || digits.length === 11;
     }, "Telefone deve ter 10 ou 11 dígitos."),
+    status: z.enum(['ativo', 'inativo']),
     
-    // Endereço
     cep: z.string().min(1, "O CEP é obrigatório.").refine(val => val.replace(/\D/g, '').length === 8, "CEP deve ter 8 dígitos."),
     logradouro: z.string().min(1, "O logradouro é obrigatório."),
     numero: z.string().min(1, "O número é obrigatório."),
@@ -39,7 +52,6 @@ const supplierSchema = z.object({
     cidade: z.string().min(1, "A cidade é obrigatória."),
     estado: z.string().min(1, "O estado é obrigatório."),
 
-    // Contato
     responsavel: z.string().optional(),
     responsavelEmail: z.string().email("E-mail do responsável inválido.").optional().or(z.literal('')),
     responsavelTelefone: z.string().optional(),
@@ -68,94 +80,104 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 );
 MaskedInput.displayName = "MaskedInput";
 
+interface EditSupplierFormProps {
+    supplier: Fornecedor;
+    setOpen: (open: boolean) => void;
+    onSaveSuccess: () => void;
+}
 
-export default function NewSupplierPage() {
-    const { user } = useAuth();
-    const router = useRouter();
+function SupplierFormContent({ supplier, onSaveSuccess, setOpen }: { supplier: Fornecedor, onSaveSuccess: () => void, setOpen: (open: boolean) => void }) {
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
+    const [isAlertOpen, setAlertOpen] = useState(false);
+    const [isClosing, setIsClosing] = useState(false);
 
     const form = useForm<z.infer<typeof supplierSchema>>({
         resolver: zodResolver(supplierSchema),
         defaultValues: {
-            razaoSocial: '',
-            nomeFantasia: '',
-            cnpj: '',
-            inscricaoEstadual: '',
-            email: '',
-            telefone: '',
-            cep: '',
-            logradouro: '',
-            numero: '',
-            complemento: '',
-            bairro: '',
-            cidade: '',
-            estado: '',
-            responsavel: '',
-            responsavelEmail: '',
-            responsavelTelefone: '',
+            ...supplier,
+            status: supplier.status || 'ativo',
         },
     });
 
-    const handleCreate = async (formData: z.infer<typeof supplierSchema>) => {
-        setSaving(true);
-        const cnpjDigits = formData.cnpj.replace(/\D/g, '');
-        
-        try {
-            const cnpjQuery = query(collection(db, 'fornecedores'), where('cnpj', '==', cnpjDigits));
-            const cnpjQuerySnapshot = await getDocs(cnpjQuery);
-            if (!cnpjQuerySnapshot.empty) {
-                toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Este CNPJ já está cadastrado.' });
-                setSaving(false);
-                return;
-            }
+    const { formState: { isDirty } } = form;
+    
+    const handleClose = () => {
+        setIsClosing(true);
+        setTimeout(() => {
+            setOpen(false);
+        }, 500); 
+    };
 
-            const docRef = doc(db, 'fornecedores', cnpjDigits);
-            await setDoc(docRef, {
+    const handleAttemptClose = () => {
+        if (isDirty) {
+            setAlertOpen(true);
+        } else {
+            handleClose();
+        }
+    };
+
+    const handleUpdate = async (formData: z.infer<typeof supplierSchema>) => {
+        setSaving(true);
+        try {
+            const dataToUpdate = {
                 ...formData,
-                cnpj: cnpjDigits,
-                status: 'ativo',
+                cnpj: formData.cnpj.replace(/\D/g, ''),
                 responsavel: formData.responsavel || '',
                 responsavelEmail: formData.responsavelEmail || '',
                 responsavelTelefone: formData.responsavelTelefone || '',
-            });
+            };
+
+            const docRef = doc(db, 'fornecedores', supplier.id);
+            await updateDoc(docRef, dataToUpdate);
             
-            toast({ title: 'Fornecedor Criado!', description: 'O novo fornecedor foi adicionado com sucesso.' });
-            router.push('/expedicao/cadastros/fornecedores');
+            toast({ title: 'Fornecedor Atualizado!', description: 'Os dados foram atualizados com sucesso.' });
+            onSaveSuccess();
+            handleClose();
 
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar o fornecedor.' });
+            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar os dados.' });
         } finally {
             setSaving(false);
         }
     };
-
-    if (!user || (user.role !== 'admin' && user.role !== 'gestor')) {
-        return (
-            <AppLayout>
-                <Card className="max-w-2xl mx-auto">
-                    <CardHeader>
-                        <CardTitle>Acesso Negado</CardTitle>
-                        <CardDescription>Você não tem permissão para criar novos fornecedores.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button onClick={() => router.back()}>Voltar</Button>
-                    </CardContent>
-                </Card>
-            </AppLayout>
-        );
-    }
-
+    
     return (
-        <AppLayout>
-            <Card className="max-w-4xl mx-auto">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Adicionar Novo Fornecedor</CardTitle>
-                    <CardDescription className="text-card-foreground">Preencha os detalhes abaixo.</CardDescription>
-                </CardHeader>
-                <CardContent>
+        <div 
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); handleAttemptClose(); } }}
+            className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}
+        >
+             <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                           <AlertTriangle className="text-destructive" /> Descartar alterações?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                            Descartar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <DialogHeader className="p-6 flex-row items-center justify-between">
+                <div>
+                    <DialogTitle className="text-2xl">Editar Fornecedor</DialogTitle>
+                    <DialogDescription>Modifique os detalhes abaixo.</DialogDescription>
+                </div>
+                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
+                    <X className="h-5 w-5" />
+                </Button>
+            </DialogHeader>
+            <ScrollArea className="flex-grow h-[calc(100%-160px)]">
+                <CardContent className="p-6">
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreate)}>
+                    <form onSubmit={form.handleSubmit(handleUpdate)}>
                          <FormSection title="Dados da Empresa">
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField control={form.control} name="razaoSocial" render={({ field }) => (
@@ -167,7 +189,7 @@ export default function NewSupplierPage() {
                              </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                    <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={true} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
                                     <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
@@ -177,8 +199,23 @@ export default function NewSupplierPage() {
                                 <FormField control={form.control} name="email" render={({ field }) => (
                                     <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
-                                <FormField control={form.control} name="telefone" render={({ field }) => (
-                                    <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                 <FormField control={form.control} name="telefone" render={({ field }) => (
+                                     <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                 )}/>
+                             </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <FormField control={form.control} name="status" render={({ field }) => (
+                                    <FormItem><FormLabel>Status</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={saving}>
+                                            <FormControl>
+                                                <SelectTrigger className="text-black"><SelectValue placeholder="Selecione um status" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="ativo">Ativo</SelectItem>
+                                                <SelectItem value="inativo">Inativo</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    <FormMessage /></FormItem>
                                 )}/>
                              </div>
                          </FormSection>
@@ -186,7 +223,7 @@ export default function NewSupplierPage() {
                         <FormSection title="Endereço">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <FormField control={form.control} name="cep" render={({ field }) => (
-                                    <FormItem className="sm:col-span-1"><FormLabel>CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                     <FormItem className="sm:col-span-1"><FormLabel>CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                  <FormField control={form.control} name="logradouro" render={({ field }) => (
                                     <FormItem className="sm:col-span-2"><FormLabel>Logradouro</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
@@ -226,19 +263,68 @@ export default function NewSupplierPage() {
                                 )}/>
                             </div>
                         </FormSection>
-
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="ghost" onClick={() => router.push('/expedicao/cadastros/fornecedores')} disabled={saving}>
-                                Cancelar
-                            </Button>
-                            <Button type="submit" variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                                {saving ? 'Salvando...' : 'Salvar Fornecedor'}
-                            </Button>
-                        </div>
                     </form>
                     </Form>
                 </CardContent>
-            </Card>
-        </AppLayout>
+            </ScrollArea>
+             <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
+                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                    Cancelar
+                </Button>
+                <Button type="button" onClick={form.handleSubmit(handleUpdate)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
+                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                </Button>
+            </div>
+        </div>
     );
+}
+
+export function EditSupplierForm(props: EditSupplierFormProps) {
+    const { supplier, ...rest } = props;
+    const { toast } = useToast();
+    const [fetchedSupplier, setFetchedSupplier] = useState<Fornecedor | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchSupplierData() {
+            setLoading(true);
+            try {
+                const docRef = doc(db, 'fornecedores', supplier.id);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setFetchedSupplier({ id: docSnap.id, ...docSnap.data() } as Fornecedor);
+                } else {
+                    toast({ variant: 'destructive', title: 'Erro', description: 'Fornecedor não encontrado.' });
+                    props.setOpen(false);
+                }
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados.' });
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        fetchSupplierData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [supplier.id]);
+
+    if (loading || !fetchedSupplier) {
+        return (
+             <div className="p-6 h-full w-full bg-card">
+                 <DialogHeader className="p-6 flex-row items-center justify-between">
+                    <div>
+                        <DialogTitle className="text-2xl">Editar Fornecedor</DialogTitle>
+                        <DialogDescription>Modifique os detalhes abaixo.</DialogDescription>
+                    </div>
+                </DialogHeader>
+                <div className="p-6 flex flex-col space-y-4">
+                    <Skeleton className="h-[20px] w-32 rounded-xl" />
+                    <Skeleton className="h-[20px] w-full rounded-xl" />
+                    <Skeleton className="h-[20px] w-full rounded-xl" />
+                </div>
+            </div>
+        );
+    }
+
+    return <SupplierFormContent supplier={fetchedSupplier} {...rest} />;
 }
