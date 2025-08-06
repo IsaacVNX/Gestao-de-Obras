@@ -1,4 +1,4 @@
-# Sistema de Gestão de Obras - Grupo Matos
+# Sistema de Gestão de Obras 
 
 Esta é uma aplicação web completa construída com Next.js, React, TypeScript, Tailwind CSS e Firebase, projetada para o gerenciamento integrado de obras, equipes, checklists de segurança e cadastros gerais de expedição.
 
