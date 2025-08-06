@@ -272,11 +272,14 @@ export function SupplierManagement() {
                 doc.setFontSize(12);
                 doc.text(title, data.settings.margin.left, 22);
 
-                const pageCount = doc.internal.getNumberOfPages();
+                let footerText = `Página ${data.pageNumber}`;
+                if ((doc as any).putTotalPages) {
+                    footerText += ` de {totalPages}`;
+                }
+                const dateText = `Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`;
+                
                 doc.setFontSize(10);
                 doc.setTextColor(150);
-                const footerText = `Página ${data.pageNumber} de ${pageCount}`;
-                const dateText = `Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`;
                 
                 doc.text(footerText, data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
                 
@@ -285,6 +288,10 @@ export function SupplierManagement() {
             },
             margin: { top: 30 },
         });
+
+        if ((doc as any).putTotalPages) {
+            (doc as any).putTotalPages('{totalPages}');
+        }
 
         if (action === 'print') {
             doc.output('dataurlnewwindow');
@@ -559,3 +566,5 @@ export function SupplierManagement() {
         </>
     );
 }
+
+    
