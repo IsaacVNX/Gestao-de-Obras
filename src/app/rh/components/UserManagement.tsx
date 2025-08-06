@@ -95,11 +95,24 @@ export function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [goToPageInput, setGoToPageInput] = useState('');
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const isGestor = user?.role === 'gestor';
   const canTakeAction = isAdmin || isGestor;
   const canCreateUser = isAdmin || isGestor;
+
+  const handleOpenCreateModal = () => {
+    setCreateModalOpen(true);
+  };
+  
+  const handleCloseCreateModal = () => {
+      setIsClosing(true);
+      setTimeout(() => {
+          setCreateModalOpen(false);
+          setIsClosing(false);
+      }, 500);
+  };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as 'ativo' | 'inativo' | 'todos');
@@ -158,7 +171,7 @@ export function UserManagement() {
             u.nome || '',
             u.email || '',
             getRoleName(u.role) || '',
-            (u.status === 'ativo' ? 'Ativo' : 'Inativo') || ''
+            (u.status === 'ativo' ? 'Ativo' : 'Inativo')
         ]);
 
         autoTable(doc, {
@@ -468,7 +481,7 @@ export function UserManagement() {
         <div className="flex items-center gap-2">
             {canCreateUser && (
                 <Button 
-                    onClick={() => setCreateModalOpen(true)}
+                    onClick={handleOpenCreateModal}
                     className="transition-transform duration-200 hover:scale-105"
                 >
                 <PlusCircle className="mr-2 h-4 w-4" />
@@ -536,8 +549,8 @@ export function UserManagement() {
       </div>
 
       <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent onOpenChange={setCreateModalOpen} onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-4xl">
-            <NewUserForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={refetchUsers} />
+        <DialogContent className="p-0 border-0 max-w-4xl">
+            <NewUserForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={refetchUsers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
         </DialogContent>
       </Dialog>
       
@@ -584,45 +597,43 @@ export function UserManagement() {
                   Visualização das informações cadastradas para este usuário.
                 </DialogDescription>
             </DialogHeader>
-            {viewingUser && (
-                <div className="space-y-4 py-4">
-                     <div className="flex items-center gap-4">
-                        <Avatar className="h-20 w-20">
-                            <AvatarImage src={viewingUser.profileImageUrl || undefined} alt={viewingUser.nome} />
-                            <AvatarFallback>{getInitials(viewingUser.nome)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <h2 className="text-xl font-bold">{viewingUser.nome}</h2>
-                            <p className="text-muted-foreground">{viewingUser.email}</p>
-                             <Badge variant={getRoleBadgeVariant(viewingUser.role)} className="mt-1">{getRoleName(viewingUser.role)}</Badge>
-                        </div>
+            <div className="space-y-4 py-4">
+                 <div className="flex items-center gap-4">
+                    <Avatar className="h-20 w-20">
+                        <AvatarImage src={viewingUser?.profileImageUrl || undefined} alt={viewingUser?.nome} />
+                        <AvatarFallback>{getInitials(viewingUser?.nome || '')}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <h2 className="text-xl font-bold">{viewingUser?.nome}</h2>
+                        <p className="text-muted-foreground">{viewingUser?.email}</p>
+                         <Badge variant={getRoleBadgeVariant(viewingUser?.role || '')} className="mt-1">{getRoleName(viewingUser?.role || '')}</Badge>
                     </div>
-                    
-                    <Separator />
-                    
-                    <div className="space-y-3">
-                        <h3 className="font-semibold text-primary">Informações Pessoais</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                            <div className="flex items-center gap-2"><UserIcon className="w-4 h-4 text-muted-foreground" /> <strong>CPF:</strong> {viewingUser.cpf || 'N/A'}</div>
-                            <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" /> <strong>Telefone:</strong> {viewingUser.telefone || 'N/A'}</div>
-                            <div className="flex items-center gap-2 col-span-2"><Calendar className="w-4 h-4 text-muted-foreground" /> <strong>Data de Nascimento:</strong> {viewingUser.dataNascimento || 'N/A'}</div>
-                        </div>
-                    </div>
-                    
-                    <Separator />
-
-                    <div className="space-y-3">
-                         <h3 className="font-semibold text-primary">Endereço</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                             <div className="flex items-start gap-2 col-span-2"><Building className="w-4 h-4 mt-1 text-muted-foreground" /> <strong>Logradouro:</strong> {viewingUser.logradouro ? `${viewingUser.logradouro}, ${viewingUser.numero}` : 'N/A'}</div>
-                             <div className="flex items-center gap-2"><strong>Bairro:</strong> {viewingUser.bairro || 'N/A'}</div>
-                             <div className="flex items-center gap-2"><strong>Cidade:</strong> {viewingUser.cidade ? `${viewingUser.cidade} - ${viewingUser.estado}` : 'N/A'}</div>
-                             <div className="flex items-center gap-2"><strong>CEP:</strong> {viewingUser.cep || 'N/A'}</div>
-                          </div>
-                    </div>
-
                 </div>
-            )}
+                
+                <Separator />
+                
+                <div className="space-y-3">
+                    <h3 className="font-semibold text-primary">Informações Pessoais</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="flex items-center gap-2"><UserIcon className="w-4 h-4 text-muted-foreground" /> <strong>CPF:</strong> {viewingUser?.cpf || 'N/A'}</div>
+                        <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" /> <strong>Telefone:</strong> {viewingUser?.telefone || 'N/A'}</div>
+                        <div className="flex items-center gap-2 col-span-2"><Calendar className="w-4 h-4 text-muted-foreground" /> <strong>Data de Nascimento:</strong> {viewingUser?.dataNascimento || 'N/A'}</div>
+                    </div>
+                </div>
+                
+                <Separator />
+
+                <div className="space-y-3">
+                     <h3 className="font-semibold text-primary">Endereço</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                         <div className="flex items-start gap-2 col-span-2"><Building className="w-4 h-4 mt-1 text-muted-foreground" /> <strong>Logradouro:</strong> {viewingUser?.logradouro ? `${viewingUser.logradouro}, ${viewingUser.numero}` : 'N/A'}</div>
+                         <div className="flex items-center gap-2"><strong>Bairro:</strong> {viewingUser?.bairro || 'N/A'}</div>
+                         <div className="flex items-center gap-2"><strong>Cidade:</strong> {viewingUser?.cidade ? `${viewingUser.cidade} - ${viewingUser.estado}` : 'N/A'}</div>
+                         <div className="flex items-center gap-2"><strong>CEP:</strong> {viewingUser?.cep || 'N/A'}</div>
+                      </div>
+                </div>
+
+            </div>
              <DialogFooter>
                 <DialogClose asChild>
                     <Button type="button" variant="outline">Fechar</Button>

@@ -544,7 +544,7 @@ export function SupplierManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onOpenChange={setCreateModalOpen} onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
+                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
                     <NewSupplierForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchSuppliers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
@@ -566,5 +566,3 @@ export function SupplierManagement() {
         </>
     );
 }
-
-    

@@ -18,7 +18,7 @@ import { getAuth } from 'firebase/auth';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField as RHFormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +28,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import React from 'react';
 import { IMaskInput } from 'react-imask';
@@ -140,16 +141,17 @@ interface NewUserFormProps {
     open: boolean;
     setOpen: (open: boolean) => void;
     onSaveSuccess: () => void;
+    isClosing: boolean;
+    handleClose: () => void;
 }
 
-export function NewUserForm({ open, setOpen, onSaveSuccess }: NewUserFormProps) {
+export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClose }: NewUserFormProps) {
     const { user: adminUser } = useAuth();
     const { toast } = useToast();
     
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [saving, setSaving] = useState(false);
-    const [isClosing, setIsClosing] = useState(false);
     const [isAlertOpen, setAlertOpen] = useState(false);
 
 
@@ -175,14 +177,6 @@ export function NewUserForm({ open, setOpen, onSaveSuccess }: NewUserFormProps) 
     });
 
     const { formState: { isDirty }, reset } = form;
-
-    const handleClose = () => {
-        setIsClosing(true);
-        setTimeout(() => {
-            setOpen(false);
-            setIsClosing(false);
-        }, 500); // Animation duration
-    };
 
     const handleAttemptClose = () => {
         if (isDirty) {
@@ -281,233 +275,229 @@ export function NewUserForm({ open, setOpen, onSaveSuccess }: NewUserFormProps) 
     }, [open, reset]);
 
     return (
-        <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { handleAttemptClose(); } }}>
-            <DialogContent onEscapeKeyDown={(e) => { e.preventDefault(); handleAttemptClose(); }} className="p-0 border-0 max-w-4xl">
-                 <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center gap-2">
-                               <AlertTriangle className="text-destructive" /> Descartar alterações?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
-                                Descartar
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-                <div className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
-                    <DialogHeader className="p-6 flex-row items-center justify-between">
-                        <div>
-                            <DialogTitle className="text-2xl">Adicionar Novo Usuário</DialogTitle>
-                            <DialogDescription>Preencha os detalhes abaixo para criar uma nova conta de usuário.</DialogDescription>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
-                            <X className="h-5 w-5" />
-                        </Button>
-                    </DialogHeader>
-                    <ScrollArea className="flex-grow h-[calc(100vh-160px)]">
-                        <CardContent className="p-6">
-                            <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleCreateUser)}>
-
-                                <div className="flex flex-col items-center space-y-4 mb-6">
-                                    <div className="relative group">
-                                        <Avatar className="h-24 w-24">
-                                            <AvatarImage src={profileImage || undefined} alt="Foto de Perfil" />
-                                            <AvatarFallback>{getInitials()}</AvatarFallback>
-                                        </Avatar>
-                                        {profileImage && (
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                                        <Trash2 className="h-8 w-8 text-white" />
-                                                    </div>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Remover foto?</AlertDialogTitle>
-                                                        <AlertDialogDescription>Tem certeza que deseja remover a foto de perfil?</AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={handleRemovePhoto}>Confirmar</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        )}
-                                    </div>
-                                    <Button type="button" variant="outline" onClick={handleFileSelect} disabled={saving} className="max-w-xs text-black transition-transform duration-200 hover:scale-105">
-                                        <Upload className="mr-2 h-4 w-4" />
-                                        Carregar Foto de Perfil
-                                    </Button>
-                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-                                </div>
-                                
-                                <FormSection title="Dados de Acesso">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <FormField control={form.control} name="firstName" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="firstName">Nome</FormLabel>
-                                                <FormControl><Input id="firstName" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="lastName" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="lastName">Sobrenome</FormLabel>
-                                                <FormControl><Input id="lastName" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                    <div className="mt-4">
-                                        <FormField control={form.control} name="email" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="email">Email</FormLabel>
-                                                <FormControl><Input id="email" type="email" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                        <FormField control={form.control} name="password" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="password">Senha</FormLabel>
-                                                <FormControl><Input id="password" type="password" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="confirmPassword" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="confirmPassword">Confirmar Senha</FormLabel>
-                                                <FormControl><Input id="confirmPassword" type="password" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                </FormSection>
-
-                                <FormSection title="Informações Pessoais">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <FormField control={form.control} name="role" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="role">Função</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={saving}>
-                                                    <FormControl>
-                                                        <SelectTrigger id="role" className="text-black"><SelectValue placeholder="Selecione uma função" /></SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="montador">Montador</SelectItem>
-                                                        <SelectItem value="encarregado">Encarregado</SelectItem>
-                                                        <SelectItem value="escritorio">Escritório</SelectItem>
-                                                        {adminUser?.role === 'admin' && <SelectItem value="gestor">Gestor</SelectItem>}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="cpf" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="cpf">CPF</FormLabel>
-                                                <FormControl>
-                                                    <MaskedInput id="cpf" {...field} mask="000.000.000-00" disabled={saving} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                        <FormField control={form.control} name="telefone" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="telefone">Telefone</FormLabel>
-                                                <FormControl>
-                                                    <MaskedInput id="telefone" {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="dataNascimento" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="dataNascimento">Data de Nascimento</FormLabel>
-                                                <FormControl><Input id="dataNascimento" type="date" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                </FormSection>
-                                
-                                <FormSection title="Endereço">
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <FormField control={form.control} name="cep" render={({ field }) => (
-                                            <FormItem className="sm:col-span-1">
-                                                <FormLabel htmlFor="cep">CEP</FormLabel>
-                                                <FormControl>
-                                                    <MaskedInput id="cep" {...field} mask="00000-000" disabled={saving} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="logradouro" render={({ field }) => (
-                                            <FormItem className="sm:col-span-2">
-                                                <FormLabel htmlFor="logradouro">Logradouro</FormLabel>
-                                                <FormControl><Input id="logradouro" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                        <FormField control={form.control} name="numero" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="numero">Número</FormLabel>
-                                                <FormControl><Input id="numero" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="bairro" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="bairro">Bairro</FormLabel>
-                                                <FormControl><Input id="bairro" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                        <FormField control={form.control} name="cidade" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="cidade">Cidade</FormLabel>
-                                                <FormControl><Input id="cidade" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="estado" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel htmlFor="estado">Estado</FormLabel>
-                                                <FormControl><Input id="estado" {...field} disabled={saving} className="text-black" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}/>
-                                    </div>
-                                </FormSection>
-                            </form>
-                            </Form>
-                        </CardContent>
-                    </ScrollArea>
-                    <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
-                        <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
-                            Cancelar
-                        </Button>
-                        <Button type="button" onClick={form.handleSubmit(handleCreateUser)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                            {saving ? 'Criando Usuário...' : 'Criar Usuário'}
-                        </Button>
-                    </div>
+        <div onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); handleAttemptClose(); } }} className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+            <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="text-destructive" /> Descartar alterações?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                            Descartar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <DialogHeader className="p-6 flex-row items-center justify-between">
+                <div>
+                    <DialogTitle className="text-2xl">Adicionar Novo Usuário</DialogTitle>
+                    <DialogDescription>Preencha os detalhes abaixo para criar uma nova conta de usuário.</DialogDescription>
                 </div>
-            </DialogContent>
-        </Dialog>
+                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
+                    <X className="h-5 w-5" />
+                </Button>
+            </DialogHeader>
+            <ScrollArea className="flex-grow h-[calc(100vh-160px)]">
+                <CardContent className="p-6">
+                    <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleCreateUser)}>
+
+                        <div className="flex flex-col items-center space-y-4 mb-6">
+                            <div className="relative group">
+                                <Avatar className="h-24 w-24">
+                                    <AvatarImage src={profileImage || undefined} alt="Foto de Perfil" />
+                                    <AvatarFallback>{getInitials()}</AvatarFallback>
+                                </Avatar>
+                                {profileImage && (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                <Trash2 className="h-8 w-8 text-white" />
+                                            </div>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Remover foto?</AlertDialogTitle>
+                                                <AlertDialogDescription>Tem certeza que deseja remover a foto de perfil?</AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleRemovePhoto}>Confirmar</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                )}
+                            </div>
+                            <Button type="button" variant="outline" onClick={handleFileSelect} disabled={saving} className="max-w-xs text-black transition-transform duration-200 hover:scale-105">
+                                <Upload className="mr-2 h-4 w-4" />
+                                Carregar Foto de Perfil
+                            </Button>
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                        </div>
+                        
+                        <FormSection title="Dados de Acesso">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <RHFormField control={form.control} name="firstName" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="firstName">Nome</FormLabel>
+                                        <FormControl><Input id="firstName" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="lastName" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="lastName">Sobrenome</FormLabel>
+                                        <FormControl><Input id="lastName" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                            <div className="mt-4">
+                                <RHFormField control={form.control} name="email" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="email">Email</FormLabel>
+                                        <FormControl><Input id="email" type="email" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <RHFormField control={form.control} name="password" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="password">Senha</FormLabel>
+                                        <FormControl><Input id="password" type="password" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="confirmPassword" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="confirmPassword">Confirmar Senha</FormLabel>
+                                        <FormControl><Input id="confirmPassword" type="password" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                        </FormSection>
+
+                        <FormSection title="Informações Pessoais">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <RHFormField control={form.control} name="role" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="role">Função</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={saving}>
+                                            <FormControl>
+                                                <SelectTrigger id="role" className="text-black"><SelectValue placeholder="Selecione uma função" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="montador">Montador</SelectItem>
+                                                <SelectItem value="encarregado">Encarregado</SelectItem>
+                                                <SelectItem value="escritorio">Escritório</SelectItem>
+                                                {adminUser?.role === 'admin' && <SelectItem value="gestor">Gestor</SelectItem>}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="cpf" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="cpf">CPF</FormLabel>
+                                        <FormControl>
+                                            <MaskedInput id="cpf" {...field} mask="000.000.000-00" disabled={saving} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <RHFormField control={form.control} name="telefone" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="telefone">Telefone</FormLabel>
+                                        <FormControl>
+                                            <MaskedInput id="telefone" {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="dataNascimento" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="dataNascimento">Data de Nascimento</FormLabel>
+                                        <FormControl><Input id="dataNascimento" type="date" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                        </FormSection>
+                        
+                        <FormSection title="Endereço">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <RHFormField control={form.control} name="cep" render={({ field }) => (
+                                    <FormItem className="sm:col-span-1">
+                                        <FormLabel htmlFor="cep">CEP</FormLabel>
+                                        <FormControl>
+                                            <MaskedInput id="cep" {...field} mask="00000-000" disabled={saving} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="logradouro" render={({ field }) => (
+                                    <FormItem className="sm:col-span-2">
+                                        <FormLabel htmlFor="logradouro">Logradouro</FormLabel>
+                                        <FormControl><Input id="logradouro" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <RHFormField control={form.control} name="numero" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="numero">Número</FormLabel>
+                                        <FormControl><Input id="numero" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="bairro" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="bairro">Bairro</FormLabel>
+                                        <FormControl><Input id="bairro" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <RHFormField control={form.control} name="cidade" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="cidade">Cidade</FormLabel>
+                                        <FormControl><Input id="cidade" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                                <RHFormField control={form.control} name="estado" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel htmlFor="estado">Estado</FormLabel>
+                                        <FormControl><Input id="estado" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            </div>
+                        </FormSection>
+                    </form>
+                    </Form>
+                </CardContent>
+            </ScrollArea>
+            <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
+                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                    Cancelar
+                </Button>
+                <Button type="button" onClick={form.handleSubmit(handleCreateUser)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
+                    {saving ? 'Criando Usuário...' : 'Criar Usuário'}
+                </Button>
+            </div>
+        </div>
     );
 }
