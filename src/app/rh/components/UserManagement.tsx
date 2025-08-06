@@ -155,10 +155,10 @@ export function UserManagement() {
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
         const tableData = filteredUsers.map(u => [
-            u.nome,
-            u.email,
-            getRoleName(u.role),
-            u.status === 'ativo' ? 'Ativo' : 'Inativo'
+            u.nome || '',
+            u.email || '',
+            getRoleName(u.role) || '',
+            (u.status === 'ativo' ? 'Ativo' : 'Inativo') || ''
         ]);
 
         autoTable(doc, {
@@ -536,7 +536,7 @@ export function UserManagement() {
       </div>
 
       <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-4xl">
+        <DialogContent onOpenChange={setCreateModalOpen} onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-4xl">
             <NewUserForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={refetchUsers} />
         </DialogContent>
       </Dialog>

@@ -255,11 +255,11 @@ export function SupplierManagement() {
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
         const tableData = filteredAndSortedSuppliers.map(s => [
-            s.razaoSocial,
-            s.cnpj,
-            s.email,
-            s.telefone,
-            s.status,
+            s.razaoSocial || '',
+            s.cnpj || '',
+            s.email || '',
+            s.telefone || '',
+            s.status || '',
         ]);
 
         autoTable(doc, {
@@ -537,7 +537,7 @@ export function SupplierManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
+                <DialogContent onOpenChange={setCreateModalOpen} onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
                     <NewSupplierForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchSuppliers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>

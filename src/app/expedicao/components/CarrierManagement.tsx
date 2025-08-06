@@ -270,11 +270,11 @@ export function CarrierManagement() {
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
         const tableData = filteredAndSortedCarriers.map(c => [
-            c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
-            c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
-            c.email,
-            c.telefone,
-            c.status,
+            (c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto) || '',
+            (c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf) || '',
+            c.email || '',
+            c.telefone || '',
+            c.status || '',
         ]);
 
         autoTable(doc, {
@@ -559,7 +559,7 @@ export function CarrierManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
+                <DialogContent onOpenChange={setCreateModalOpen} onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
                     <NewCarrierForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchCarriers} isClosing={isClosing} handleClose={handleCloseCreateModal}/>
                 </DialogContent>
             </Dialog>

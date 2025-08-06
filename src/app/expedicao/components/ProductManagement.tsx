@@ -257,10 +257,10 @@ export function ProductManagement() {
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
         const tableData = filteredAndSortedProducts.map(p => [
-            p.nome,
-            p.sku,
+            p.nome || '',
+            p.sku || '',
             formatCurrency(p.valor),
-            p.status,
+            p.status || '',
         ]);
 
         autoTable(doc, {
@@ -542,7 +542,7 @@ export function ProductManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
+                <DialogContent onOpenChange={setCreateModalOpen} onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
                     <NewProductForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchProducts} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
