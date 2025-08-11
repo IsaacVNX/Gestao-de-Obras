@@ -14,18 +14,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
+  DialogTitle as ShadDialogTitle,
   DialogFooter,
   DialogClose,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useUserManagement, type Usuario } from '@/hooks/use-user-management';
@@ -40,7 +50,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { NewUserForm } from './NewUserForm';
+import { NewUserForm, type NewUserFormHandle } from './NewUserForm';
 
 const getRoleName = (role: string) => {
   switch (role) {
@@ -96,15 +106,13 @@ export function UserManagement() {
   const [goToPageInput, setGoToPageInput] = useState('');
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const newUserFormRef = useRef<NewUserFormHandle>(null);
+
 
   const isAdmin = user?.role === 'admin';
   const isGestor = user?.role === 'gestor';
   const canTakeAction = isAdmin || isGestor;
   const canCreateUser = isAdmin || isGestor;
-
-  const handleOpenCreateModal = () => {
-    setCreateModalOpen(true);
-  };
   
   const handleCloseCreateModal = () => {
       setIsClosing(true);
@@ -381,7 +389,7 @@ export function UserManagement() {
                 {isAdmin && <TableHead className="text-black">Email (Login)</TableHead>}
                 <TableHead className="text-black">Função</TableHead>
                 {activeTab === 'todos' && <TableHead className="text-black">Status</TableHead>}
-                {canTakeAction && <TableHead className="text-right text-black">Ações</TableHead>}
+                {canTakeAction && <TableHead className="text-right"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -480,13 +488,30 @@ export function UserManagement() {
         {/* Header Actions */}
         <div className="flex items-center gap-2">
             {canCreateUser && (
-                <Button 
-                    onClick={handleOpenCreateModal}
-                    className="transition-transform duration-200 hover:scale-105"
+            <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
+                <DialogTrigger asChild>
+                    <Button className="transition-all duration-300 ease-in-out hover:scale-105">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Novo Usuário
+                    </Button>
+                </DialogTrigger>
+                <DialogContent 
+                    className="p-0 border-0 w-screen h-screen max-w-full top-0 left-0 translate-x-0 translate-y-0 rounded-none"
+                    onEscapeKeyDown={(e) => {
+                        e.preventDefault();
+                        newUserFormRef.current?.handleAttemptClose();
+                    }}
                 >
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Novo Usuário
-            </Button>
+                    <NewUserForm
+                        ref={newUserFormRef}
+                        open={isCreateModalOpen} 
+                        setOpen={setCreateModalOpen} 
+                        onSaveSuccess={refetchUsers} 
+                        isClosing={isClosing} 
+                        handleClose={handleCloseCreateModal} 
+                    />
+                </DialogContent>
+            </Dialog>
             )}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -547,22 +572,16 @@ export function UserManagement() {
             {renderContent()}
         </div>
       </div>
-
-      <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className="p-0 border-0 max-w-4xl">
-            <NewUserForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={refetchUsers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
-        </DialogContent>
-      </Dialog>
       
       {/* Edit Role Dialog */}
-      <Dialog open={!!editingUser} onOpenChange={(open) => !open && handleCloseEditDialog()}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Editar Função do Usuário</DialogTitle>
-                <DialogDescription>
+      <AlertDialog open={!!editingUser} onOpenChange={(open) => !open && handleCloseEditDialog()}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Editar Função do Usuário</AlertDialogTitle>
+                <AlertDialogDescription>
                     Altere a função de {editingUser?.nome}. O usuário precisará fazer login novamente para que as alterações tenham efeito.
-                </DialogDescription>
-            </DialogHeader>
+                </AlertDialogDescription>
+            </AlertDialogHeader>
             <div className="space-y-4 py-4">
                 <div className="space-y-2">
                     <Label htmlFor="role">Função</Label>
@@ -579,20 +598,21 @@ export function UserManagement() {
                     </Select>
                 </div>
             </div>
-            <DialogFooter>
-                <DialogClose asChild>
+            <AlertDialogFooter>
+                <AlertDialogCancel asChild>
                     <Button type="button" variant="outline" disabled={saving}>Cancelar</Button>
-                </DialogClose>
+                </AlertDialogCancel>
                 <Button onClick={handleUpdateRole} disabled={saving}>{saving ? "Salvando..." : "Salvar Alterações"}</Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* View User Details Dialog */}
       <Dialog open={!!viewingUser} onOpenChange={(open) => !open && setViewingUser(null)}>
-        <DialogContent className="max-w-lg bg-background text-foreground">
+        <DialogContent className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
+          <div className="relative w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
             <DialogHeader>
-                <DialogTitle>Detalhes do Usuário</DialogTitle>
+                <ShadDialogTitle>Detalhes do Usuário</ShadDialogTitle>
                 <DialogDescription>
                   Visualização das informações cadastradas para este usuário.
                 </DialogDescription>
@@ -639,6 +659,7 @@ export function UserManagement() {
                     <Button type="button" variant="outline">Fechar</Button>
                 </DialogClose>
             </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </>

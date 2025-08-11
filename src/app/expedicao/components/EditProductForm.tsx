@@ -1,24 +1,20 @@
-
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
-import { CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, Trash2, Paperclip, Info, ChevronUp, Save, X, AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { Produto } from './ProductManagement';
 import {
@@ -31,7 +27,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from '@/components/ui/skeleton';
 
 const photoSchema = z.object({
   url: z.string().min(1, "A URL da foto é obrigatória."),
@@ -63,20 +58,20 @@ const productSchema = z.object({
     fotos: z.array(photoSchema).optional(),
 });
 
-
-const CollapsibleFormSection = ({ title, children, defaultOpen = true }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => (
-    <>
-      <Separator className="my-4" />
-      <Collapsible defaultOpen={defaultOpen}>
-        <CollapsibleTrigger className="w-full flex justify-between items-center group py-2">
-            <h3 className="text-lg font-semibold text-primary-foreground">{title}</h3>
-            <ChevronUp className="h-5 w-5 text-primary-foreground group-data-[state=closed]:rotate-180 transition-transform"/>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-4">
-            {children}
-        </CollapsibleContent>
-      </Collapsible>
-    </>
+const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => (
+    <Card className="shadow-lg bg-white text-black border-border">
+        <Collapsible defaultOpen={defaultOpen}>
+            <CollapsibleTrigger className="w-full group">
+                <CardHeader className="flex flex-row items-center justify-between py-4">
+                    <CardTitleComponent className="text-black">{title}</CardTitleComponent>
+                    <ChevronUp className="h-5 w-5 text-black transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+                <CardContent>{children}</CardContent>
+            </CollapsibleContent>
+        </Collapsible>
+    </Card>
 );
 
 const InputWithUnit = ({ field, unit, disabled, id }: { field: any, unit: string, disabled?: boolean, id: string }) => (
@@ -88,7 +83,7 @@ const InputWithUnit = ({ field, unit, disabled, id }: { field: any, unit: string
             value={field.value ?? ''}
             onChange={e => field.onChange(e.target.value === '' ? '' : e.target.valueAsNumber)}
             disabled={disabled} 
-            className="pr-12 text-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+            className="pr-12 text-black bg-background border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
             step="any"
         />
         <div className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-sm text-muted-foreground bg-gray-100 rounded-r-md border-l">
@@ -97,13 +92,17 @@ const InputWithUnit = ({ field, unit, disabled, id }: { field: any, unit: string
     </div>
 );
 
+export interface EditFormHandle {
+    handleAttemptClose: () => void;
+}
+
 interface EditProductFormProps {
     product: Produto;
     setOpen: (open: boolean) => void;
     onSaveSuccess: () => void;
 }
 
-function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Produto, onSaveSuccess: () => void, setOpen: (open: boolean) => void }) {
+export const EditProductForm = forwardRef<EditFormHandle, EditProductFormProps>(({ product, onSaveSuccess, setOpen }, ref) => {
     const { toast } = useToast();
     
     const [saving, setSaving] = useState(false);
@@ -118,9 +117,9 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
         },
     });
 
-    const { formState: { isDirty }, reset } = form;
+    const { formState: { isDirty } } = form;
 
-    const { fields, append, remove, replace } = useFieldArray({
+    const { fields, append, remove } = useFieldArray({
         control: form.control,
         name: 'fotos',
     });
@@ -139,6 +138,10 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
             handleClose();
         }
     };
+    
+    useImperativeHandle(ref, () => ({
+        handleAttemptClose,
+    }));
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -215,77 +218,77 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
     }
     
     return (
-        <div 
-            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); handleAttemptClose(); } }}
-            className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}
-        >
-            <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
-                           <AlertTriangle className="text-destructive" /> Descartar alterações?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
-                            Descartar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <DialogHeader className="p-6 flex-row items-center justify-between">
-                <div>
-                    <DialogTitle className="text-2xl">Editar Produto</DialogTitle>
-                    <DialogDescription className="text-card-foreground">Modifique os detalhes abaixo.</DialogDescription>
+        <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+             <div className="w-full flex flex-col h-full bg-[#ededed]">
+                <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="text-destructive" /> Descartar alterações?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Você tem alterações não salvas. Tem certeza de que deseja fechar e descartar as alterações?
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                                Descartar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
+                    <div>
+                        <h2 className="text-2xl font-semibold text-foreground">Editar Produto</h2>
+                        <p className="text-sm text-muted-foreground">
+                             Modifique os detalhes do produto abaixo.
+                        </p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-foreground hover:bg-muted">
+                        <X className="h-5 w-5" />
+                    </Button>
                 </div>
-                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
-                    <X className="h-5 w-5" />
-                </Button>
-            </DialogHeader>
-            <ScrollArea className="flex-grow h-[calc(100%-160px)]">
-                <CardContent className="p-6">
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(handleUpdate)} onKeyDown={checkEnter}>
-                            <CollapsibleFormSection title="Informações Básicas">
+
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleUpdate)} onKeyDown={checkEnter} className="flex flex-col flex-1 overflow-hidden">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            <CollapsibleCard title="Informações Básicas">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <FormField control={form.control} name="nome" render={({ field }) => (
                                         <FormItem className="col-span-3 sm:col-span-1">
-                                            <FormLabel htmlFor="nome">Nome do Produto</FormLabel>
-                                            <FormControl><Input id="nome" {...field} disabled={saving} className="text-black" /></FormControl>
+                                            <FormLabel htmlFor="nome" className="text-black">Nome do Produto</FormLabel>
+                                            <FormControl><Input id="nome" {...field} disabled={saving} className="bg-background text-black border-border" /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="sku" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="sku">SKU (Código)</FormLabel>
-                                            <FormControl><Input id="sku" {...field} disabled={true} className="text-black" /></FormControl>
+                                            <FormLabel htmlFor="sku" className="text-black">SKU (Código)</FormLabel>
+                                            <FormControl><Input id="sku" {...field} disabled={true} className="bg-background text-black border-border" /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="valor" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="valor">Valor (R$)</FormLabel>
-                                            <FormControl><Input id="valor" type="number" {...field} disabled={saving} step="0.01" className="text-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" onChange={e => field.onChange(e.target.valueAsNumber)}/></FormControl>
+                                            <FormLabel htmlFor="valor" className="text-black">Valor (R$)</FormLabel>
+                                            <FormControl><Input id="valor" type="number" {...field} disabled={saving} step="0.01" className="bg-background text-black border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" onChange={e => field.onChange(e.target.valueAsNumber)}/></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="unidadeMedida" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="unidadeMedida">Unidade de Medida</FormLabel>
-                                            <FormControl><Input id="unidadeMedida" {...field} placeholder="Ex: Peça, Metro, Kg" disabled={saving} className="text-black" /></FormControl>
+                                            <FormLabel htmlFor="unidadeMedida" className="text-black">Unidade de Medida</FormLabel>
+                                            <FormControl><Input id="unidadeMedida" {...field} placeholder="Ex: Peça, Metro, Kg" disabled={saving} className="bg-background text-black border-border" /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="status" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="status">Status</FormLabel>
+                                            <FormLabel htmlFor="status" className="text-black">Status</FormLabel>
                                             <Select onValueChange={field.onChange} value={field.value} disabled={saving}>
                                                 <FormControl>
-                                                    <SelectTrigger id="status" className="text-black"><SelectValue placeholder="Selecione um status" /></SelectTrigger>
+                                                    <SelectTrigger id="status" className="bg-background text-black border-border"><SelectValue placeholder="Selecione um status" /></SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
                                                     <SelectItem value="ativo">Ativo</SelectItem>
@@ -297,88 +300,88 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
                                     )}/>
                                     <FormField control={form.control} name="observacoes" render={({ field }) => (
                                         <FormItem className="col-span-3">
-                                            <FormLabel htmlFor="observacoes">Observações do Produto</FormLabel>
-                                            <FormControl><Textarea id="observacoes" {...field} disabled={saving} className="text-black"/></FormControl>
+                                            <FormLabel htmlFor="observacoes" className="text-black">Observações do Produto</FormLabel>
+                                            <FormControl><Textarea id="observacoes" {...field} disabled={saving} className="bg-background text-black border-border"/></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                 </div>
-                            </CollapsibleFormSection>
+                            </CollapsibleCard>
 
-                            <CollapsibleFormSection title="Dados Fiscais">
+                            <CollapsibleCard title="Dados Fiscais">
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <FormField control={form.control} name="cest" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="cest">CEST</FormLabel>
-                                            <FormControl><Input id="cest" {...field} disabled={saving} className="text-black"/></FormControl>
+                                            <FormLabel htmlFor="cest" className="text-black">CEST</FormLabel>
+                                            <FormControl><Input id="cest" {...field} disabled={saving} className="bg-background text-black border-border"/></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="ncm" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="ncm">NCM</FormLabel>
-                                            <FormControl><Input id="ncm" {...field} disabled={saving} className="text-black"/></FormControl>
+                                            <FormLabel htmlFor="ncm" className="text-black">NCM</FormLabel>
+                                            <FormControl><Input id="ncm" {...field} disabled={saving} className="bg-background text-black border-border"/></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="tipoProduto" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="tipoProduto">Tipo de Produto</FormLabel>
-                                            <FormControl><Input id="tipoProduto" {...field} disabled={saving} className="text-black"/></FormControl>
+                                            <FormLabel htmlFor="tipoProduto" className="text-black">Tipo de Produto</FormLabel>
+                                            <FormControl><Input id="tipoProduto" {...field} disabled={saving} className="bg-background text-black border-border"/></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="origem" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel htmlFor="origem">Origem</FormLabel>
-                                            <FormControl><Input id="origem" {...field} disabled={saving} className="text-black"/></FormControl>
+                                            <FormLabel htmlFor="origem" className="text-black">Origem</FormLabel>
+                                            <FormControl><Input id="origem" {...field} disabled={saving} className="bg-background text-black border-border"/></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                 </div>
-                            </CollapsibleFormSection>
+                            </CollapsibleCard>
 
-                            <CollapsibleFormSection title="Pesos e Dimensões">
+                            <CollapsibleCard title="Pesos e Dimensões">
                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
                                     <div className="md:col-span-9 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                         <FormField control={form.control} name="altura" render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel htmlFor="altura">Altura</FormLabel>
+                                                <FormLabel htmlFor="altura" className="text-black">Altura</FormLabel>
                                                 <FormControl><InputWithUnit id="altura" field={field} unit="cm" disabled={saving}/></FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}/>
                                         <FormField control={form.control} name="largura" render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel htmlFor="largura">Largura</FormLabel>
+                                                <FormLabel htmlFor="largura" className="text-black">Largura</FormLabel>
                                                 <FormControl><InputWithUnit id="largura" field={field} unit="cm" disabled={saving}/></FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}/>
                                         <FormField control={form.control} name="profundidade" render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel htmlFor="profundidade">Profundidade</FormLabel>
+                                                <FormLabel htmlFor="profundidade" className="text-black">Profundidade</FormLabel>
                                                 <FormControl><InputWithUnit id="profundidade" field={field} unit="cm" disabled={saving}/></FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}/>
                                         <FormField control={form.control} name="volumes" render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel htmlFor="volumes">Volumes</FormLabel>
-                                                <FormControl><Input id="volumes" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? '' : e.target.valueAsNumber)} disabled={saving} className="text-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></FormControl>
+                                                <FormLabel htmlFor="volumes" className="text-black">Volumes</FormLabel>
+                                                <FormControl><Input id="volumes" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? '' : e.target.valueAsNumber)} disabled={saving} className="bg-background text-black border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}/>
                                         <FormField control={form.control} name="pesoLiquido" render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel htmlFor="pesoLiquido">Peso Líquido</FormLabel>
+                                                <FormLabel htmlFor="pesoLiquido" className="text-black">Peso Líquido</FormLabel>
                                                 <FormControl><InputWithUnit id="pesoLiquido" field={field} unit="kg" disabled={saving}/></FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}/>
                                         <FormField control={form.control} name="pesoBruto" render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel htmlFor="pesoBruto">Peso Bruto</FormLabel>
+                                                <FormLabel htmlFor="pesoBruto" className="text-black">Peso Bruto</FormLabel>
                                                 <FormControl><InputWithUnit id="pesoBruto" field={field} unit="kg" disabled={saving}/></FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -388,17 +391,17 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
                                         <img src="https://placehold.co/200x150.png" width={200} height={150} alt="Ilustração de uma caixa com dimensões" data-ai-hint="package box" className="w-48 h-auto"/>
                                     </div>
                                 </div>
-                            </CollapsibleFormSection>
+                            </CollapsibleCard>
                             
-                            <CollapsibleFormSection title="Fotos">
-                                <div className="p-4 rounded-md border bg-card text-card-foreground">
-                                    <div className="grid grid-cols-12 gap-4 px-2 py-1 text-sm font-medium text-card-foreground">
-                                        <div className="col-span-6 flex items-center text-white">
+                            <CollapsibleCard title="Fotos">
+                                <div className="p-4 rounded-md border bg-white text-black">
+                                    <div className="grid grid-cols-12 gap-4 px-2 py-1 text-sm font-medium text-black">
+                                        <div className="col-span-6 flex items-center">
                                             Foto
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <button type="button" className="ml-1.5 cursor-help p-1 rounded-full hover:bg-white/10">
+                                                        <button type="button" className="ml-1.5 cursor-help p-1 rounded-full hover:bg-black/10">
                                                             <Info className="h-5 w-5" />
                                                         </button>
                                                     </TooltipTrigger>
@@ -409,16 +412,16 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
                                                 </Tooltip>
                                             </TooltipProvider>
                                         </div>
-                                        <div className="col-span-6 text-white">Descrição</div>
+                                        <div className="col-span-6">Descrição</div>
                                     </div>
-                                    <Separator className="my-2 bg-card-foreground/20" />
+                                    <hr className="my-2 border-border" />
                                     <div className="space-y-2">
                                         {fields.map((field, index) => (
-                                            <div key={field.id} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md bg-card-foreground/10">
-                                                <div className="col-span-6 flex items-center gap-2 text-sm text-card-foreground">
+                                            <div key={field.id} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md bg-black/5">
+                                                <div className="col-span-6 flex items-center gap-2 text-sm text-black">
                                                     <Paperclip className="h-4 w-4" />
                                                     <span className="truncate">{field.name || 'Foto Carregada'}</span>
-                                                    {field.size && <span className="text-xs text-card-foreground/70">({formatFileSize(field.size)})</span>}
+                                                    {field.size && <span className="text-xs text-muted-foreground">({formatFileSize(field.size)})</span>}
                                                 </div>
                                                 <div className="col-span-5">
                                                     <FormField
@@ -426,7 +429,7 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
                                                         name={`fotos.${index}.description`}
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormControl><Input {...field} placeholder="Ex: Vista frontal" disabled={saving} className="bg-card text-card-foreground border-card-foreground/50 h-9" /></FormControl>
+                                                                <FormControl><Input {...field} placeholder="Ex: Vista frontal" disabled={saving} className="bg-background text-black border-border h-9" /></FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
                                                         )}
@@ -436,7 +439,7 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
                                                     <TooltipProvider>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/20 hover:text-destructive" onClick={() => remove(index)}>
+                                                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/20 hover:text-destructive" onClick={() => remove(index)} disabled={saving}>
                                                                     <Trash2 className="h-4 w-4"/>
                                                                 </Button>
                                                             </TooltipTrigger>
@@ -447,84 +450,35 @@ function ProductFormContent({ product, onSaveSuccess, setOpen }: { product: Prod
                                             </div>
                                         ))}
                                         {fields.length === 0 && (
-                                            <div className="text-center py-4 text-sm text-card-foreground/70">
+                                            <div className="text-center py-4 text-sm text-muted-foreground">
                                                 Nenhuma foto adicionada.
                                             </div>
                                         )}
                                     </div>
-                                    <Separator className="my-2 bg-card-foreground/20" />
+                                    <hr className="my-2 border-border" />
                                     <div className="pt-2">
-                                        <Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} className="text-card-foreground hover:bg-card-foreground/10 hover:text-card-foreground">
+                                        <Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} className="text-black hover:bg-black/10 hover:text-black" disabled={saving}>
                                             <Upload className="mr-2 h-4 w-4" />
                                             Adicionar Foto
                                         </Button>
                                         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/jpeg,image/png,image/webp,image/jpg" />
                                     </div>
                                 </div>
-                            </CollapsibleFormSection>
-                        </form>
-                    </Form>
-                </CardContent>
-            </ScrollArea>
-             <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
-                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
-                    Cancelar
-                </Button>
-                <Button type="button" onClick={form.handleSubmit(handleUpdate)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {saving ? 'Salvando...' : 'Salvar Alterações'}
-                </Button>
+                            </CollapsibleCard>
+                        </div>
+                        <div className="p-4 flex justify-end gap-2 mt-auto bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t">
+                            <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" variant="default" className="transition-transform duration-200 hover:scale-105" disabled={saving || !isDirty}>
+                                <Save className="mr-2 h-4 w-4" />
+                                {saving ? 'Salvando...' : 'Salvar Alterações'}
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
             </div>
         </div>
     );
-}
-
-export function EditProductForm(props: EditProductFormProps) {
-    const { product, ...rest } = props;
-    const { toast } = useToast();
-    const [fetchedProduct, setFetchedProduct] = useState<Produto | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        async function fetchProductData() {
-            setLoading(true);
-            try {
-                const docRef = doc(db, 'produtos', product.id);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    setFetchedProduct({ id: docSnap.id, ...docSnap.data() } as Produto);
-                } else {
-                    toast({ variant: 'destructive', title: 'Erro', description: 'Produto não encontrado.' });
-                    props.setOpen(false);
-                }
-            } catch (error) {
-                toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados do produto.' });
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        fetchProductData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [product.id]);
-
-    if (loading || !fetchedProduct) {
-        return (
-            <div className="p-6 h-full w-full bg-card">
-                 <DialogHeader className="p-6 flex-row items-center justify-between">
-                    <div>
-                        <DialogTitle className="text-2xl">Editar Produto</DialogTitle>
-                        <DialogDescription className="text-card-foreground">Modifique os detalhes abaixo.</DialogDescription>
-                    </div>
-                </DialogHeader>
-                <div className="p-6 flex flex-col space-y-4">
-                    <Skeleton className="h-[20px] w-32 rounded-xl" />
-                    <Skeleton className="h-[20px] w-full rounded-xl" />
-                    <Skeleton className="h-[20px] w-full rounded-xl" />
-                </div>
-            </div>
-        );
-    }
-    
-    return <ProductFormContent product={fetchedProduct} {...rest} />;
-}
+});
+EditProductForm.displayName = 'EditProductForm';

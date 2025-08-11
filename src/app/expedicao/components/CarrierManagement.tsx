@@ -1,10 +1,9 @@
-
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
-import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from '@/hooks/use-auth';
 import { useLoading } from '@/hooks/use-loading';
 import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -45,8 +44,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { NewCarrierForm } from './NewCarrierForm';
-import { EditCarrierForm } from './EditCarrierForm';
+import { NewCarrierForm, type NewCarrierFormHandle } from './NewCarrierForm';
+import { ViewCarrierForm } from './ViewCarrierForm';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export type Transportadora = {
@@ -85,9 +84,10 @@ export function CarrierManagement() {
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [editingCarrier, setEditingCarrier] = useState<Transportadora | null>(null);
+    const [viewingCarrier, setViewingCarrier] = useState<Transportadora | null>(null);
 
     const [isClosing, setIsClosing] = useState(false);
+    const newCarrierFormRef = useRef<NewCarrierFormHandle>(null);
 
     const handleOpenCreateModal = () => {
         setCreateModalOpen(true);
@@ -101,12 +101,12 @@ export function CarrierManagement() {
         }, 500);
     };
     
-    const handleOpenEditModal = (carrier: Transportadora) => {
-        setEditingCarrier(carrier);
+    const handleOpenViewModal = (carrier: Transportadora) => {
+        setViewingCarrier(carrier);
     };
 
-    const handleCloseEditModal = () => {
-        setEditingCarrier(null);
+    const handleCloseViewModal = () => {
+        setViewingCarrier(null);
     };
 
     const canManage = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
@@ -447,7 +447,7 @@ export function CarrierManagement() {
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
+                                    {canManage && <TableHead className="text-right text-black"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -473,8 +473,8 @@ export function CarrierManagement() {
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(carrier)}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Editar
+                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(carrier)}>
+                                                            <Eye className="mr-2 h-4 w-4" /> Visualizar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         {carrier.status === 'ativo' ? (
@@ -566,20 +566,25 @@ export function CarrierManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                    <NewCarrierForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchCarriers} isClosing={isClosing} handleClose={handleCloseCreateModal}/>
+                <DialogContent 
+                    onEscapeKeyDown={(e) => {
+                        e.preventDefault();
+                        newCarrierFormRef.current?.handleAttemptClose();
+                    }} 
+                    className="p-0 border-0 inset-0"
+                >
+                    <NewCarrierForm ref={newCarrierFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchCarriers} isClosing={isClosing} handleClose={handleCloseCreateModal}/>
                 </DialogContent>
             </Dialog>
 
-            {editingCarrier && (
-                <Dialog open={!!editingCarrier} onOpenChange={(open) => !open && handleCloseEditModal()}>
-                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                        <EditCarrierForm 
-                            carrier={editingCarrier} 
-                            setOpen={(open) => !open && handleCloseEditModal()} 
+            {viewingCarrier && (
+                <Dialog open={!!viewingCarrier} onOpenChange={(open) => !open && handleCloseViewModal()}>
+                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 inset-0">
+                        <ViewCarrierForm 
+                            carrier={viewingCarrier} 
+                            setOpen={(open) => !open && handleCloseViewModal()} 
                             onSaveSuccess={() => {
                                 fetchCarriers();
-                                setEditingCarrier(null);
                             }}
                         />
                     </DialogContent>

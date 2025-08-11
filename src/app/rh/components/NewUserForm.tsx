@@ -1,8 +1,8 @@
 
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
-import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -10,9 +10,8 @@ import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Upload, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Upload, X, AlertTriangle, Save, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import { getApps, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { useForm } from 'react-hook-form';
@@ -28,13 +27,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import React from 'react';
 import { IMaskInput } from 'react-imask';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { DialogHeader, DialogTitle, DialogDescription, Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 // Função de validação de CPF
 const validateCpf = (cpf: string) => {
@@ -115,14 +112,6 @@ const userSchema = z.object({
 });
 
 
-const FormSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
-    <>
-        <Separator className="my-6" />
-        <h3 className="text-lg font-semibold mb-4 text-primary-foreground">{title}</h3>
-        {children}
-    </>
-);
-
 const MaskedInput = React.forwardRef<HTMLInputElement, any>(
   ({ onChange, ...props }, ref) => {
     return (
@@ -137,6 +126,10 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 );
 MaskedInput.displayName = "MaskedInput";
 
+export interface NewUserFormHandle {
+    handleAttemptClose: () => void;
+}
+
 interface NewUserFormProps {
     open: boolean;
     setOpen: (open: boolean) => void;
@@ -145,7 +138,23 @@ interface NewUserFormProps {
     handleClose: () => void;
 }
 
-export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClose }: NewUserFormProps) {
+const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => (
+    <Card className="shadow-lg bg-white text-black border-border">
+        <Collapsible defaultOpen={defaultOpen}>
+            <CollapsibleTrigger className="w-full group">
+                <CardHeader className="flex flex-row items-center justify-between py-4">
+                    <CardTitleComponent className="text-black">{title}</CardTitleComponent>
+                    <ChevronUp className="h-5 w-5 text-black transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="data-[state=open]:animate-slide-down-slow">
+                <CardContent>{children}</CardContent>
+            </CollapsibleContent>
+        </Collapsible>
+    </Card>
+);
+
+export const NewUserForm = forwardRef<NewUserFormHandle, NewUserFormProps>(({ open, setOpen, onSaveSuccess, isClosing, handleClose }, ref) => {
     const { user: adminUser } = useAuth();
     const { toast } = useToast();
     
@@ -153,6 +162,8 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [saving, setSaving] = useState(false);
     const [isAlertOpen, setAlertOpen] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 
     const form = useForm<z.infer<typeof userSchema>>({
@@ -186,6 +197,10 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
         }
     };
 
+    useImperativeHandle(ref, () => ({
+        handleAttemptClose
+    }));
+
 
     const getInitials = () => {
         const { firstName, lastName } = form.getValues();
@@ -206,10 +221,6 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
             };
             reader.readAsDataURL(file);
         }
-    };
-    
-    const handleRemovePhoto = () => {
-        setProfileImage(null);
     };
 
     const handleCreateUser = async (formData: z.infer<typeof userSchema>) => {
@@ -275,84 +286,70 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
     }, [open, reset]);
 
     return (
-        <div onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); handleAttemptClose(); } }} className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
-            <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
+        <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+            <div className="w-full flex flex-col h-full bg-[#ededed]">
+                <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="text-destructive" /> Descartar alterações?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
-                            Descartar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <DialogHeader className="p-6 flex-row items-center justify-between">
-                <div>
-                    <DialogTitle className="text-2xl">Adicionar Novo Usuário</DialogTitle>
-                    <DialogDescription>Preencha os detalhes abaixo para criar uma nova conta de usuário.</DialogDescription>
-                </div>
-                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
-                    <X className="h-5 w-5" />
-                </Button>
-            </DialogHeader>
-            <ScrollArea className="flex-grow h-[calc(100vh-160px)]">
-                <CardContent className="p-6">
-                    <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreateUser)}>
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Você tem alterações não salvas. Tem certeza de que deseja fechar e descartar as alterações?
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                                Descartar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
-                        <div className="flex flex-col items-center space-y-4 mb-6">
-                            <div className="relative group">
-                                <Avatar className="h-24 w-24">
-                                    <AvatarImage src={profileImage || undefined} alt="Foto de Perfil" />
-                                    <AvatarFallback>{getInitials()}</AvatarFallback>
-                                </Avatar>
-                                {profileImage && (
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                                <Trash2 className="h-8 w-8 text-white" />
-                                            </div>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Remover foto?</AlertDialogTitle>
-                                                <AlertDialogDescription>Tem certeza que deseja remover a foto de perfil?</AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction onClick={handleRemovePhoto}>Confirmar</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                )}
+                <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
+                    <div>
+                        <h2 className="text-2xl font-semibold text-foreground">Adicionar Novo Usuário</h2>
+                        <p className="text-sm text-muted-foreground">Preencha os detalhes abaixo para criar uma nova conta.</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-foreground hover:bg-muted">
+                        <X className="h-5 w-5" />
+                    </Button>
+                </div>
+            
+                <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleCreateUser)} className="flex flex-col flex-1 overflow-hidden">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <CollapsibleCard title="Foto de Perfil">
+                            <div className="flex flex-col items-center space-y-4">
+                                    <div className="relative cursor-pointer">
+                                    <Avatar className="h-24 w-24">
+                                        <AvatarImage src={profileImage || undefined} alt="Foto de Perfil" />
+                                        <AvatarFallback>{getInitials()}</AvatarFallback>
+                                    </Avatar>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2 w-full max-w-sm">
+                                    <Button type="button" variant="outline" onClick={handleFileSelect} disabled={saving} className="flex-1 text-black transition-transform duration-200 hover:scale-105">
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Carregar do dispositivo
+                                    </Button>
+                                </div>
+                                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
                             </div>
-                            <Button type="button" variant="outline" onClick={handleFileSelect} disabled={saving} className="max-w-xs text-black transition-transform duration-200 hover:scale-105">
-                                <Upload className="mr-2 h-4 w-4" />
-                                Carregar Foto de Perfil
-                            </Button>
-                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-                        </div>
+                        </CollapsibleCard>
                         
-                        <FormSection title="Dados de Acesso">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <CollapsibleCard title="Dados de Acesso">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <RHFormField control={form.control} name="firstName" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="firstName">Nome</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="firstName">Nome</FormLabel>
                                         <FormControl><Input id="firstName" {...field} disabled={saving} className="text-black" /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                                 <RHFormField control={form.control} name="lastName" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="lastName">Sobrenome</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="lastName">Sobrenome</FormLabel>
                                         <FormControl><Input id="lastName" {...field} disabled={saving} className="text-black" /></FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -361,7 +358,7 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
                             <div className="mt-4">
                                 <RHFormField control={form.control} name="email" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="email">Email</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="email">Email</FormLabel>
                                         <FormControl><Input id="email" type="email" {...field} disabled={saving} className="text-black" /></FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -370,26 +367,54 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <RHFormField control={form.control} name="password" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="password">Senha</FormLabel>
-                                        <FormControl><Input id="password" type="password" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormLabel className="text-black" htmlFor="password">Senha</FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <Input id="password" type={showPassword ? "text" : "password"} {...field} disabled={saving} className="text-black pr-10" />
+                                                <Button 
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-500 hover:text-gray-900 hover:bg-gray-200"
+                                                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                                                >
+                                                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                                </Button>
+                                            </div>
+                                        </FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                                 <RHFormField control={form.control} name="confirmPassword" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="confirmPassword">Confirmar Senha</FormLabel>
-                                        <FormControl><Input id="confirmPassword" type="password" {...field} disabled={saving} className="text-black" /></FormControl>
+                                        <FormLabel className="text-black" htmlFor="confirmPassword">Confirmar Senha</FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <Input id="confirmPassword" type={showConfirmPassword ? "text" : "password"} {...field} disabled={saving} className="text-black pr-10" />
+                                                <Button 
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-500 hover:text-gray-900 hover:bg-gray-200"
+                                                    aria-label={showConfirmPassword ? "Ocultar senha" : "Mostrar senha"}
+                                                >
+                                                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                                </Button>
+                                            </div>
+                                        </FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                             </div>
-                        </FormSection>
+                        </CollapsibleCard>
 
-                        <FormSection title="Informações Pessoais">
+                        <CollapsibleCard title="Informações Pessoais e Função">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <RHFormField control={form.control} name="role" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="role">Função</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="role">Função</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value} disabled={saving}>
                                             <FormControl>
                                                 <SelectTrigger id="role" className="text-black"><SelectValue placeholder="Selecione uma função" /></SelectTrigger>
@@ -406,7 +431,7 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
                                 )}/>
                                 <RHFormField control={form.control} name="cpf" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="cpf">CPF</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="cpf">CPF</FormLabel>
                                         <FormControl>
                                             <MaskedInput id="cpf" {...field} mask="000.000.000-00" disabled={saving} />
                                         </FormControl>
@@ -417,7 +442,7 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <RHFormField control={form.control} name="telefone" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="telefone">Telefone</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="telefone">Telefone</FormLabel>
                                         <FormControl>
                                             <MaskedInput id="telefone" {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} />
                                         </FormControl>
@@ -426,78 +451,67 @@ export function NewUserForm({ open, setOpen, onSaveSuccess, isClosing, handleClo
                                 )}/>
                                 <RHFormField control={form.control} name="dataNascimento" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel htmlFor="dataNascimento">Data de Nascimento</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="dataNascimento">Data de Nascimento</FormLabel>
                                         <FormControl><Input id="dataNascimento" type="date" {...field} disabled={saving} className="text-black" /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                             </div>
-                        </FormSection>
+                        </CollapsibleCard>
                         
-                        <FormSection title="Endereço">
+                        <CollapsibleCard title="Endereço">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <RHFormField control={form.control} name="cep" render={({ field }) => (
+                            <RHFormField control={form.control} name="cep" render={({ field }) => (
                                     <FormItem className="sm:col-span-1">
-                                        <FormLabel htmlFor="cep">CEP</FormLabel>
+                                        <FormLabel className="text-black" htmlFor="cep">CEP</FormLabel>
                                         <FormControl>
                                             <MaskedInput id="cep" {...field} mask="00000-000" disabled={saving} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
-                                <RHFormField control={form.control} name="logradouro" render={({ field }) => (
-                                    <FormItem className="sm:col-span-2">
-                                        <FormLabel htmlFor="logradouro">Logradouro</FormLabel>
-                                        <FormControl><Input id="logradouro" {...field} disabled={saving} className="text-black" /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
+                            <RHFormField control={form.control} name="logradouro" render={({ field }) => (
+                                    <FormItem className="sm:col-span-2"><FormLabel className="text-black">Logradouro</FormLabel><FormControl><Input {...field} placeholder="Rua das Flores" disabled={saving} className="text-black"/></FormControl><FormMessage /></FormItem>
                                 )}/>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <RHFormField control={form.control} name="numero" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel htmlFor="numero">Número</FormLabel>
-                                        <FormControl><Input id="numero" {...field} disabled={saving} className="text-black" /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
+                            <RHFormField control={form.control} name="numero" render={({ field }) => (
+                                    <FormItem><FormLabel className="text-black">Número</FormLabel><FormControl><Input {...field} placeholder="123" disabled={saving} className="text-black"/></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <RHFormField control={form.control} name="bairro" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel htmlFor="bairro">Bairro</FormLabel>
-                                        <FormControl><Input id="bairro" {...field} disabled={saving} className="text-black" /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
+                                    <FormItem><FormLabel className="text-black">Bairro</FormLabel><FormControl><Input {...field} placeholder="Centro" disabled={saving} className="text-black"/></FormControl><FormMessage /></FormItem>
                                 )}/>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <RHFormField control={form.control} name="cidade" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel htmlFor="cidade">Cidade</FormLabel>
-                                        <FormControl><Input id="cidade" {...field} disabled={saving} className="text-black" /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
+                                    <FormItem><FormLabel className="text-black">Cidade</FormLabel><FormControl><Input {...field} placeholder="São Paulo" disabled={saving} className="text-black"/></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <RHFormField control={form.control} name="estado" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel htmlFor="estado">Estado</FormLabel>
-                                        <FormControl><Input id="estado" {...field} disabled={saving} className="text-black" /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
+                                    <FormItem><FormLabel className="text-black">Estado</FormLabel><FormControl><Input {...field} placeholder="SP" disabled={saving} className="text-black"/></FormControl><FormMessage /></FormItem>
                                 )}/>
                             </div>
-                        </FormSection>
-                    </form>
-                    </Form>
-                </CardContent>
-            </ScrollArea>
-            <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
-                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
-                    Cancelar
-                </Button>
-                <Button type="button" onClick={form.handleSubmit(handleCreateUser)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                    {saving ? 'Criando Usuário...' : 'Criar Usuário'}
-                </Button>
+                        </CollapsibleCard>
+                    </div>
+                    <div className="p-4 flex justify-end gap-2 mt-auto bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t">
+                        <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                            Cancelar
+                        </Button>
+                        <Button type="submit" variant="default" className="transition-transform duration-200 hover:scale-105" disabled={saving}>
+                            <Save className="mr-2 h-4 w-4" />
+                            {saving ? 'Criando Usuário...' : 'Criar Usuário'}
+                        </Button>
+                    </div>
+                </form>
+                </Form>
             </div>
         </div>
     );
-}
+});
+NewUserForm.displayName = "NewUserForm";
+    
+
+    
+
+
+
+    

@@ -44,11 +44,8 @@ export function useAuth() {
       console.error("Error signing out: ", error);
     }
   }, [router]);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      setLoading(true);
-      
+  
+  const fetchUserDetails = useCallback(async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
         const userDocSnap = await getDoc(userDocRef);
@@ -58,7 +55,6 @@ export function useAuth() {
            if(userData.status !== 'ativo') {
               await auth.signOut();
               setUser(null);
-              setLoading(false);
               return;
             }
           
@@ -89,12 +85,18 @@ export function useAuth() {
         setUser(null);
       }
       setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      setLoading(true);
+      await fetchUserDetails(firebaseUser);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [router]);
+  }, [fetchUserDetails]);
 
-  return { user, loading, logout };
+  return { user, loading, logout, refetchUser: () => fetchUserDetails(auth.currentUser) };
 }

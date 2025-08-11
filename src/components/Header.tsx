@@ -11,6 +11,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth, type User } from '@/hooks/use-auth';
 import { useLoading } from '@/hooks/use-loading';
@@ -20,7 +31,8 @@ import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import SidebarContent from './SidebarContent';
 import { cn } from '@/lib/utils';
 import { navLinks, type NavItem, type SubNavItem, type CollapsibleSubMenu, type MenuLabel } from '@/lib/nav-links';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import ProfileForm, { type ProfileFormHandle } from './ProfileForm';
 
 
 const getInitials = (name: string) => {
@@ -69,6 +81,8 @@ export default function Header({ user, isSidebarCollapsed, isSubMenuVisible, act
     const router = useRouter();
     const pathname = usePathname();
     const [pageTitle, setPageTitle] = useState('');
+    const [isProfileOpen, setProfileOpen] = useState(false);
+    const profileFormRef = useRef<ProfileFormHandle>(null);
 
     useEffect(() => {
         const mainCategory = findMainCategory(pathname);
@@ -80,7 +94,15 @@ export default function Header({ user, isSidebarCollapsed, isSubMenuVisible, act
         router.push(path);
     };
 
+    const handleEscapeKeyDown = (e: KeyboardEvent) => {
+        if (profileFormRef.current) {
+            e.preventDefault();
+            profileFormRef.current.handleAttemptClose();
+        }
+    }
+
     return (
+        <>
         <header className="fixed top-0 left-0 right-0 z-30 flex h-16 items-center border-b bg-background/95 backdrop-blur-sm">
              {/* Logo Section */}
              <div className="hidden lg:flex items-center justify-center shrink-0" style={{ width: '270px' }}>
@@ -131,20 +153,56 @@ export default function Header({ user, isSidebarCollapsed, isSubMenuVisible, act
                     <DropdownMenuContent align="end" className="w-56">
                         <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleNavigate('/profile')}>
+                        <DropdownMenuItem onSelect={() => setProfileOpen(true)}>
                             <UserIcon className="mr-2 h-4 w-4" />
                             <span>Meu Perfil</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-                            <LogOut className="mr-2 h-4 w-4" />
-                            <span>Sair</span>
-                        </DropdownMenuItem>
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    <span>Sair</span>
+                                </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Saída</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Você tem certeza que deseja sair do sistema?
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        onClick={logout}
+                                        className="bg-destructive hover:bg-destructive/90 transition-transform duration-200 hover:scale-105"
+                                    >
+                                        Sair
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </DropdownMenuContent>
                 </DropdownMenu>
                 )}
             </div>
         </header>
+
+         <Sheet open={isProfileOpen} onOpenChange={setProfileOpen}>
+            <SheetContent 
+                onEscapeKeyDown={(e) => {
+                    if (profileFormRef.current) {
+                        profileFormRef.current.handleEscapeKeyDown(e as any);
+                    }
+                }} 
+                onInteractOutside={(e) => e.preventDefault()}
+                className="p-0 border-0 w-full sm:max-w-2xl overflow-y-auto"
+            >
+                <ProfileForm ref={profileFormRef} setOpen={setProfileOpen} />
+            </SheetContent>
+        </Sheet>
+        </>
     )
 }
 

@@ -23,6 +23,12 @@ function InnerAppLayout({ children }: { children: ReactNode }) {
   const [isSubMenuVisible, setIsSubMenuVisible] = useState(true);
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
     setIsLoading(false);
     
     const currentMainCategory = navLinks.find(link => 

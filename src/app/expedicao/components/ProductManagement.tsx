@@ -1,10 +1,9 @@
-
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
-import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from '@/hooks/use-auth';
 import { useLoading } from '@/hooks/use-loading';
 import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -46,8 +45,8 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { NewProductForm } from './NewProductForm';
-import { EditProductForm } from './EditProductForm';
+import { NewProductForm, type NewProductFormHandle } from './NewProductForm';
+import { ViewProductForm } from './ViewProductForm';
 
 
 export type Produto = {
@@ -82,8 +81,9 @@ export function ProductManagement() {
     const [goToPageInput, setGoToPageInput] = useState('');
     
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [editingProduct, setEditingProduct] = useState<Produto | null>(null);
+    const [viewingProduct, setViewingProduct] = useState<Produto | null>(null);
     const [isClosing, setIsClosing] = useState(false);
+    const newProductFormRef = useRef<NewProductFormHandle>(null);
     
     const canManage = user?.role === 'admin' || user?.role === 'gestor';
 
@@ -99,12 +99,12 @@ export function ProductManagement() {
         }, 500);
     };
     
-    const handleOpenEditModal = (product: Produto) => {
-        setEditingProduct(product);
+    const handleOpenViewModal = (product: Produto) => {
+        setViewingProduct(product);
     };
 
-    const handleCloseEditModal = () => {
-        setEditingProduct(null);
+    const handleCloseViewModal = () => {
+        setViewingProduct(null);
     };
 
     const fetchProducts = async () => {
@@ -431,7 +431,7 @@ export function ProductManagement() {
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('sku')}>SKU {getSortIcon('sku')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('valor')}>Valor {getSortIcon('valor')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
+                                    {canManage && <TableHead className="text-right text-black"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -456,8 +456,8 @@ export function ProductManagement() {
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(product)}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Editar
+                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(product)}>
+                                                            <Eye className="mr-2 h-4 w-4" /> Visualizar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         {product.status === 'ativo' ? (
@@ -549,20 +549,25 @@ export function ProductManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                    <NewProductForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchProducts} isClosing={isClosing} handleClose={handleCloseCreateModal} />
+                <DialogContent 
+                    onEscapeKeyDown={(e) => {
+                        e.preventDefault();
+                        newProductFormRef.current?.handleAttemptClose();
+                    }} 
+                    className="p-0 border-0 inset-0"
+                >
+                    <NewProductForm ref={newProductFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchProducts} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
             
-            {editingProduct && (
-                <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) handleCloseEditModal(); }}>
-                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                        <EditProductForm 
-                            product={editingProduct}
-                            setOpen={(open) => !open && handleCloseEditModal()} 
+            {viewingProduct && (
+                <Dialog open={!!viewingProduct} onOpenChange={(open) => { if (!open) handleCloseViewModal(); }}>
+                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 inset-0">
+                        <ViewProductForm 
+                            product={viewingProduct}
+                            setOpen={(open) => !open && handleCloseViewModal()} 
                             onSaveSuccess={() => {
                                 fetchProducts();
-                                handleCloseEditModal();
                             }}
                         />
                     </DialogContent>

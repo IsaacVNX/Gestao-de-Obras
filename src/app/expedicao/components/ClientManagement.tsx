@@ -1,10 +1,9 @@
-
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
-import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from '@/hooks/use-auth';
 import { useLoading } from '@/hooks/use-loading';
 import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -45,9 +44,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { NewClientForm } from './NewClientForm';
-import { EditClientForm } from './EditClientForm';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { NewClientForm, type NewClientFormHandle } from './NewClientForm';
+import { ViewClientForm } from './ViewClientForm';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export type Cliente = {
     id: string;
@@ -86,8 +85,9 @@ export function ClientManagement() {
     const [goToPageInput, setGoToPageInput] = useState('');
     
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [editingClient, setEditingClient] = useState<Cliente | null>(null);
+    const [viewingClient, setViewingClient] = useState<Cliente | null>(null);
     const [isClosing, setIsClosing] = useState(false);
+    const newClientFormRef = useRef<NewClientFormHandle>(null);
 
     const handleOpenCreateModal = () => {
         setCreateModalOpen(true);
@@ -101,12 +101,12 @@ export function ClientManagement() {
         }, 500);
     };
 
-    const handleOpenEditModal = (client: Cliente) => {
-        setEditingClient(client);
+    const handleOpenViewModal = (client: Cliente) => {
+        setViewingClient(client);
     };
 
-    const handleCloseEditModal = () => {
-        setEditingClient(null);
+    const handleCloseViewModal = () => {
+        setViewingClient(null);
     };
 
     const canManageClients = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
@@ -456,7 +456,7 @@ export function ClientManagement() {
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManageClients && <TableHead className="text-right text-black">Ações</TableHead>}
+                                    {canManageClients && <TableHead className="text-right text-black"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -482,8 +482,8 @@ export function ClientManagement() {
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(client)}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Editar
+                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(client)}>
+                                                            <Eye className="mr-2 h-4 w-4" /> Visualizar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         {client.status === 'ativo' ? (
@@ -575,20 +575,25 @@ export function ClientManagement() {
             </div>
             
              <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                    <NewClientForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchClients} isClosing={isClosing} handleClose={handleCloseCreateModal} />
+                <DialogContent 
+                    onEscapeKeyDown={(e) => {
+                        e.preventDefault();
+                        newClientFormRef.current?.handleAttemptClose();
+                    }} 
+                    className="p-0 border-0 inset-0"
+                >
+                    <NewClientForm ref={newClientFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchClients} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
 
-            {editingClient && (
-                 <Dialog open={!!editingClient} onOpenChange={(open) => !open && handleCloseEditModal()}>
-                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                       <EditClientForm 
-                           client={editingClient}
-                           setOpen={(open) => !open && handleCloseEditModal()} 
+            {viewingClient && (
+                 <Dialog open={!!viewingClient} onOpenChange={(open) => !open && handleCloseViewModal()}>
+                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 inset-0">
+                       <ViewClientForm 
+                           client={viewingClient}
+                           setOpen={(open) => !open && handleCloseViewModal()} 
                            onSaveSuccess={() => {
                                fetchClients();
-                               handleCloseEditModal();
                            }}
                        />
                     </DialogContent>

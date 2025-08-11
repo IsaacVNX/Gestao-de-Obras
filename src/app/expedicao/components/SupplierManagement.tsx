@@ -1,10 +1,9 @@
-
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
-import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, PlusCircle, ChevronDown, ArrowUp, ArrowDown, Trash2, Edit, MoreHorizontal, Printer, Upload, Download, UserX, UserCheck, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from '@/hooks/use-auth';
 import { useLoading } from '@/hooks/use-loading';
 import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -47,8 +46,8 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { NewSupplierForm } from './NewSupplierForm';
-import { EditSupplierForm } from './EditSupplierForm';
+import { NewSupplierForm, type NewSupplierFormHandle } from './NewSupplierForm';
+import { ViewSupplierForm } from './ViewSupplierForm';
 
 export type Fornecedor = {
     id: string;
@@ -83,8 +82,9 @@ export function SupplierManagement() {
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [editingSupplier, setEditingSupplier] = useState<Fornecedor | null>(null);
+    const [viewingSupplier, setViewingSupplier] = useState<Fornecedor | null>(null);
     const [isClosing, setIsClosing] = useState(false);
+    const newSupplierFormRef = useRef<NewSupplierFormHandle>(null);
 
     const handleOpenCreateModal = () => {
         setCreateModalOpen(true);
@@ -98,12 +98,12 @@ export function SupplierManagement() {
         }, 500);
     };
     
-    const handleOpenEditModal = (supplier: Fornecedor) => {
-        setEditingSupplier(supplier);
+    const handleOpenViewModal = (supplier: Fornecedor) => {
+        setViewingSupplier(supplier);
     };
 
-    const handleCloseEditModal = () => {
-        setEditingSupplier(null);
+    const handleCloseViewModal = () => {
+        setViewingSupplier(null);
     };
 
     const canManage = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
@@ -425,7 +425,7 @@ export function SupplierManagement() {
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManage && <TableHead className="text-right text-black">Ações</TableHead>}
+                                    {canManage && <TableHead className="text-right text-black"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -451,8 +451,8 @@ export function SupplierManagement() {
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenEditModal(supplier)}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Editar
+                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(supplier)}>
+                                                            <Eye className="mr-2 h-4 w-4" /> Visualizar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         {supplier.status === 'ativo' ? (
@@ -544,20 +544,25 @@ export function SupplierManagement() {
             </div>
             
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                    <NewSupplierForm open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchSuppliers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
+                <DialogContent 
+                    onEscapeKeyDown={(e) => {
+                        e.preventDefault();
+                        newSupplierFormRef.current?.handleAttemptClose();
+                    }}
+                    className="p-0 border-0 inset-0"
+                >
+                    <NewSupplierForm ref={newSupplierFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchSuppliers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
 
-            {editingSupplier && (
-                <Dialog open={!!editingSupplier} onOpenChange={(open) => !open && handleCloseEditModal()}>
-                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 max-w-full h-full">
-                        <EditSupplierForm 
-                            supplier={editingSupplier}
-                            setOpen={(open) => !open && handleCloseEditModal()} 
+            {viewingSupplier && (
+                <Dialog open={!!viewingSupplier} onOpenChange={(open) => !open && handleCloseViewModal()}>
+                    <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 inset-0">
+                        <ViewSupplierForm 
+                            supplier={viewingSupplier}
+                            setOpen={(open) => !open && handleCloseViewModal()} 
                             onSaveSuccess={() => {
                                 fetchSuppliers();
-                                handleCloseEditModal();
                             }}
                         />
                     </DialogContent>

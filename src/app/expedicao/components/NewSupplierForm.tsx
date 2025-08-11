@@ -1,23 +1,19 @@
 
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Separator } from '@/components/ui/separator';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { IMaskInput } from 'react-imask';
 import React from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Save, ChevronUp } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +23,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
 
 const supplierSchema = z.object({
     razaoSocial: z.string().min(1, "A razão social é obrigatória."),
@@ -56,14 +55,6 @@ const supplierSchema = z.object({
 });
 
 
-const FormSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
-    <>
-        <Separator className="my-6" />
-        <h3 className="text-lg font-semibold mb-4 text-primary-foreground">{title}</h3>
-        {children}
-    </>
-);
-
 const MaskedInput = React.forwardRef<HTMLInputElement, any>(
   ({ onChange, ...props }, ref) => {
     return (
@@ -78,6 +69,10 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 );
 MaskedInput.displayName = "MaskedInput";
 
+export interface NewSupplierFormHandle {
+    handleAttemptClose: () => void;
+}
+
 interface NewSupplierFormProps {
     open: boolean;
     setOpen: (open: boolean) => void;
@@ -86,7 +81,23 @@ interface NewSupplierFormProps {
     handleClose: () => void;
 }
 
-export function NewSupplierForm({ open, setOpen, onSaveSuccess, isClosing, handleClose }: NewSupplierFormProps) {
+const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => (
+    <Card className="shadow-lg bg-white text-black border-border">
+        <Collapsible defaultOpen={defaultOpen}>
+            <CollapsibleTrigger className="w-full group">
+                <CardHeader className="flex flex-row items-center justify-between py-4">
+                    <CardTitleComponent className="text-black">{title}</CardTitleComponent>
+                    <ChevronUp className="h-5 w-5 text-black transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="data-[state=open]:animate-slide-down-slow">
+                <CardContent>{children}</CardContent>
+            </CollapsibleContent>
+        </Collapsible>
+    </Card>
+);
+
+export const NewSupplierForm = forwardRef<NewSupplierFormHandle, NewSupplierFormProps>(({ open, setOpen, onSaveSuccess, isClosing, handleClose }, ref) => {
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
     const [isAlertOpen, setAlertOpen] = useState(false);
@@ -122,6 +133,10 @@ export function NewSupplierForm({ open, setOpen, onSaveSuccess, isClosing, handl
             handleClose();
         }
     };
+    
+    useImperativeHandle(ref, () => ({
+        handleAttemptClose,
+    }));
 
     const handleCreate = async (formData: z.infer<typeof supplierSchema>) => {
         setSaving(true);
@@ -164,128 +179,124 @@ export function NewSupplierForm({ open, setOpen, onSaveSuccess, isClosing, handl
     }, [open, form]);
 
     return (
-        <div 
-            onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    handleAttemptClose();
-                }
-            }}
-            className={cn('h-full w-full bg-card', isClosing ? 'animate-slide-down' : 'animate-slide-up')}
-        >
-             <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
-                           <AlertTriangle className="text-destructive" /> Descartar alterações?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Você tem alterações não salvas. Tem certeza de que deseja fechar o formulário e descartar as alterações?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
-                            Descartar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <DialogHeader className="p-6 flex-row items-center justify-between">
-                 <div>
-                    <DialogTitle className="text-2xl">Adicionar Novo Fornecedor</DialogTitle>
-                    <DialogDescription>Preencha os detalhes abaixo para criar um novo fornecedor.</DialogDescription>
-                 </div>
-                <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-card-foreground hover:bg-card-foreground/10">
-                    <X className="h-5 w-5" />
-                </Button>
-            </DialogHeader>
-            <ScrollArea className="flex-grow h-[calc(100%-160px)]">
-                <CardContent className="p-6">
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(handleCreate)}>
-                            <FormSection title="Dados da Empresa">
+        <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+            <div className="w-full flex flex-col h-full bg-[#ededed]">
+                <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="text-destructive" /> Descartar alterações?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Você tem alterações não salvas. Tem certeza de que deseja fechar e descartar as alterações?
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Continuar Editando</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClose} className="bg-destructive hover:bg-destructive/80">
+                                Descartar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
+                    <div>
+                        <h2 className="text-2xl font-semibold text-foreground">Adicionar Novo Fornecedor</h2>
+                        <p className="text-sm text-muted-foreground">Preencha os detalhes abaixo para criar um novo fornecedor.</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-foreground hover:bg-muted">
+                        <X className="h-5 w-5" />
+                    </Button>
+                </div>
+                
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleCreate)} className="flex flex-col flex-1 overflow-hidden">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                           <CollapsibleCard title="Dados Principais" defaultOpen={true}>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="razaoSocial" render={({ field }) => (
-                                        <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Razão Social</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="nomeFantasia" render={({ field }) => (
-                                        <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Nome Fantasia</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                     <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                        <FormItem><FormLabel>CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">CNPJ</FormLabel><FormControl><MaskedInput {...field} mask="00.000.000/0000-00" disabled={saving} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="inscricaoEstadual" render={({ field }) => (
-                                        <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Inscrição Estadual</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                     <FormField control={form.control} name="email" render={({ field }) => (
-                                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Email</FormLabel><FormControl><Input type="email" {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="telefone" render={({ field }) => (
-                                        <FormItem><FormLabel>Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Telefone</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
-                            </FormSection>
+                            </CollapsibleCard>
                             
-                            <FormSection title="Endereço">
+                            <CollapsibleCard title="Endereço">
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <FormField control={form.control} name="cep" render={({ field }) => (
-                                        <FormItem className="sm:col-span-1"><FormLabel>CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem className="sm:col-span-1"><FormLabel className="text-black">CEP</FormLabel><FormControl><MaskedInput {...field} mask="00000-000" disabled={saving} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="logradouro" render={({ field }) => (
-                                        <FormItem className="sm:col-span-2"><FormLabel>Logradouro</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem className="sm:col-span-2"><FormLabel className="text-black">Logradouro</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                     <FormField control={form.control} name="numero" render={({ field }) => (
-                                        <FormItem><FormLabel>Número</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Número</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="complemento" render={({ field }) => (
-                                        <FormItem><FormLabel>Complemento</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Complemento</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="bairro" render={({ field }) => (
-                                        <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Bairro</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                     <FormField control={form.control} name="cidade" render={({ field }) => (
-                                        <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Cidade</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="estado" render={({ field }) => (
-                                        <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input {...field} disabled={saving} maxLength={2} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Estado (UF)</FormLabel><FormControl><Input {...field} disabled={saving} maxLength={2} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
-                            </FormSection>
+                            </CollapsibleCard>
                             
-                            <FormSection title="Contato">
+                            <CollapsibleCard title="Contato do Responsável">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <FormField control={form.control} name="responsavel" render={({ field }) => (
-                                        <FormItem><FormLabel>Nome do Responsável</FormLabel><FormControl><Input {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Nome do Responsável</FormLabel><FormControl><Input {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="responsavelEmail" render={({ field }) => (
-                                        <FormItem><FormLabel>E-mail do Responsável</FormLabel><FormControl><Input type="email" {...field} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">E-mail do Responsável</FormLabel><FormControl><Input type="email" {...field} disabled={saving} className="bg-background text-black border-border placeholder:text-muted-foreground" /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <FormField control={form.control} name="responsavelTelefone" render={({ field }) => (
-                                        <FormItem><FormLabel>Contato do Responsável</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel className="text-black">Contato do Responsável</FormLabel><FormControl><MaskedInput {...field} mask={[{mask: '(00) 0000-0000'}, {mask: '(00) 00000-0000'}]} disabled={saving} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                 </div>
-                            </FormSection>
-                        </form>
-                    </Form>
-                </CardContent>
-            </ScrollArea>
-             <div className="p-6 flex justify-end gap-2 absolute bottom-0 w-full bg-card border-t">
-                <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
-                    Cancelar
-                </Button>
-                <Button type="button" onClick={form.handleSubmit(handleCreate)} variant="secondary" className="text-black transition-transform duration-200 hover:scale-105" disabled={saving}>
-                    {saving ? 'Salvando...' : 'Salvar Fornecedor'}
-                </Button>
+                            </CollapsibleCard>
+                        </div>
+                        <div className="p-4 flex justify-end gap-2 mt-auto bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t">
+                            <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" variant="default" className="transition-transform duration-200 hover:scale-105" disabled={saving}>
+                                <Save className="mr-2 h-4 w-4" />
+                                {saving ? 'Salvando...' : 'Salvar Fornecedor'}
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
             </div>
         </div>
     );
-}
+});
+NewSupplierForm.displayName = "NewSupplierForm";
