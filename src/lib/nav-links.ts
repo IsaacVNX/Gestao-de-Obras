@@ -78,6 +78,16 @@ export const navLinks: NavItem[] = [
         roles: ['admin', 'gestor'],
         subItems: [
             { key: 'almoxarifado-painel', href: '/almoxarifado', label: 'Painel do Almoxarifado', icon: Warehouse, roles: ['admin', 'gestor'], type: 'link' },
+            { 
+                type: 'collapsible',
+                key: 'almoxarifado-cadastros',
+                label: 'Cadastros',
+                roles: ['admin', 'gestor'],
+                subItems: [
+                    { key: 'almoxarifado-produtos', href: '/almoxarifado/cadastros/produtos', label: 'Produtos', icon: Package, roles: ['admin', 'gestor'] },
+                    { key: 'almoxarifado-fornecedores', href: '/almoxarifado/cadastros/fornecedores', label: 'Fornecedores', icon: ClipboardCheck, roles: ['admin', 'gestor'] },
+                ]
+            }
         ]
     },
     { 

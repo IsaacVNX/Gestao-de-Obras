@@ -140,7 +140,7 @@ export const EditSupplierForm = forwardRef<EditFormHandle, EditSupplierFormProps
                 responsavelTelefone: formData.responsavelTelefone || '',
             };
 
-            const docRef = doc(db, 'fornecedores', supplier.id);
+            const docRef = doc(db, 'fornecedores_almoxarifado', supplier.id);
             await updateDoc(docRef, dataToUpdate);
             
             toast({ title: 'Fornecedor Atualizado!', description: 'Os dados foram atualizados com sucesso.' });
@@ -189,7 +189,7 @@ export const EditSupplierForm = forwardRef<EditFormHandle, EditSupplierFormProps
                 </div>
                 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleUpdate)} className="flex flex-col flex-1 overflow-hidden">
+                    <form onSubmit={(e) => { e.preventDefault(); form.handleSubmit(handleUpdate)(); }} className="flex flex-col flex-1 overflow-hidden">
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <CollapsibleCard title="Dados Principais" defaultOpen={true}>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

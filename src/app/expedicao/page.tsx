@@ -4,7 +4,6 @@ import AppLayout from '@/components/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Truck, Building } from 'lucide-react';
 import { Suspense } from 'react';
-import { ClientManagement } from './components/ClientManagement';
 import { useRouter } from 'next/navigation';
 
 

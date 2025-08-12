@@ -114,7 +114,7 @@ export function ClientManagement() {
     const fetchClients = async () => {
         setLoading(true);
         try {
-            const clientsSnapshot = await getDocs(collection(db, 'clientes'));
+            const clientsSnapshot = await getDocs(collection(db, 'clientes_expedicao'));
             const clientsList = clientsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
@@ -139,7 +139,7 @@ export function ClientManagement() {
     
     const handleDeleteClient = async (clientId: string) => {
         try {
-            await deleteDoc(doc(db, 'clientes', clientId));
+            await deleteDoc(doc(db, 'clientes_expedicao', clientId));
             setClientes(prev => prev.filter(c => c.id !== clientId));
             setSelectedClients(prev => prev.filter(id => id !== clientId));
             toast({ title: 'Cliente Excluído', description: 'O cliente foi removido com sucesso.' });
@@ -151,7 +151,7 @@ export function ClientManagement() {
     const handleToggleStatus = async (clientIds: string[], newStatus: 'ativo' | 'inativo') => {
         const batch = writeBatch(db);
         clientIds.forEach(id => {
-            const clientRef = doc(db, 'clientes', id);
+            const clientRef = doc(db, 'clientes_expedicao', id);
             batch.update(clientRef, { status: newStatus });
         });
 
@@ -168,7 +168,7 @@ export function ClientManagement() {
     const handleBulkDelete = async () => {
         const batch = writeBatch(db);
         selectedClients.forEach(id => {
-            batch.delete(doc(db, 'clientes', id));
+            batch.delete(doc(db, 'clientes_expedicao', id));
         });
 
         try {
@@ -317,18 +317,18 @@ export function ClientManagement() {
         }
 
         if (action === 'save') {
-            doc.save('relatorio_clientes.pdf');
+            doc.save('relatorio_clientes_expedicao.pdf');
         } else {
             doc.output('dataurlnewwindow');
         }
     };
 
     const handlePrint = () => {
-        generatePDF('Relatório de Clientes', 'print');
+        generatePDF('Relatório de Clientes (Expedição)', 'print');
     };
 
     const handleExportPDF = () => {
-        generatePDF('Relatório de Clientes', 'save');
+        generatePDF('Relatório de Clientes (Expedição)', 'save');
     };
 
 
@@ -343,7 +343,7 @@ export function ClientManagement() {
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Clientes');
-        XLSX.writeFile(workbook, 'relatorio_clientes.xlsx');
+        XLSX.writeFile(workbook, 'relatorio_clientes_expedicao.xlsx');
     };
 
     const showDevelopmentToast = () => {
@@ -395,7 +395,7 @@ export function ClientManagement() {
                     </DropdownMenu>
                 </div>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-4 space-y-4">
                         <div className="relative flex-grow">
                             <Input 
@@ -445,7 +445,7 @@ export function ClientManagement() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-0">
                         <Table>
                             <TableHeader>
@@ -456,7 +456,7 @@ export function ClientManagement() {
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManageClients && <TableHead className="text-right text-black"></TableHead>}
+                                    {canManageClients && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

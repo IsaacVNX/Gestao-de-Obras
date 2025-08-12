@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const baseSchema = z.object({
     inscricaoEstadual: z.string().optional(),
@@ -35,7 +36,6 @@ const baseSchema = z.object({
         return digits.length === 10 || digits.length === 11;
     }, "Telefone deve ter 10 ou 11 dígitos."),
     
-    // Endereço
     cep: z.string().min(1, "O CEP é obrigatório.").refine(val => val.replace(/\D/g, '').length === 8, "CEP deve ter 8 dígitos."),
     logradouro: z.string().min(1, "O logradouro é obrigatório."),
     numero: z.string().min(1, "O número é obrigatório."),
@@ -44,13 +44,12 @@ const baseSchema = z.object({
     cidade: z.string().min(1, "A cidade é obrigatória."),
     estado: z.string().min(1, "O estado é obrigatório."),
 
-    // Contato
     responsavel: z.string().optional(),
     responsavelEmail: z.string().email("E-mail do responsável inválido.").optional().or(z.literal('')),
     responsavelTelefone: z.string().optional(),
 });
 
-const carrierSchema = z.discriminatedUnion("tipoPessoa", [
+const clientSchema = z.discriminatedUnion("tipoPessoa", [
     z.object({
         tipoPessoa: z.literal('juridica'),
         razaoSocial: z.string().min(1, "A razão social é obrigatória."),
@@ -84,11 +83,11 @@ const MaskedInput = React.forwardRef<HTMLInputElement, any>(
 );
 MaskedInput.displayName = "MaskedInput";
 
-export interface NewCarrierFormHandle {
+export interface NewClientFormHandle {
     handleAttemptClose: () => void;
 }
 
-interface NewCarrierFormProps {
+interface NewClientFormProps {
     open: boolean;
     setOpen: (open: boolean) => void;
     onSaveSuccess: () => void;
@@ -112,13 +111,13 @@ const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: strin
     </Card>
 );
 
-export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormProps>(({ open, setOpen, onSaveSuccess, isClosing, handleClose }, ref) => {
+export const NewClientForm = forwardRef<NewClientFormHandle, NewClientFormProps>(({ open, setOpen, onSaveSuccess, isClosing, handleClose }, ref) => {
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
     const [isAlertOpen, setAlertOpen] = useState(false);
 
-    const form = useForm<z.infer<typeof carrierSchema>>({
-        resolver: zodResolver(carrierSchema),
+    const form = useForm<z.infer<typeof clientSchema>>({
+        resolver: zodResolver(clientSchema),
         defaultValues: {
             tipoPessoa: 'juridica',
             razaoSocial: '',
@@ -141,7 +140,7 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
             responsavelTelefone: '',
         },
     });
-
+    
     const { formState: { isDirty } } = form;
 
     const handleAttemptClose = () => {
@@ -151,14 +150,14 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
             handleClose();
         }
     };
-    
+
     useImperativeHandle(ref, () => ({
         handleAttemptClose,
     }));
 
     const tipoPessoa = form.watch('tipoPessoa');
 
-    const handleCreate = async (formData: z.infer<typeof carrierSchema>) => {
+    const handleCreateClient = async (formData: z.infer<typeof clientSchema>) => {
         setSaving(true);
         const identifier = (formData.tipoPessoa === 'juridica' ? formData.cnpj : formData.cpf)?.replace(/\D/g, '') || '';
         
@@ -170,7 +169,7 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
 
         try {
             const fieldToCheck = formData.tipoPessoa === 'juridica' ? 'cnpj' : 'cpf';
-            const q = query(collection(db, 'transportadoras'), where(fieldToCheck, '==', identifier));
+            const q = query(collection(db, 'clientes_expedicao'), where(fieldToCheck, '==', identifier));
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 toast({ variant: 'destructive', title: 'Erro de Criação', description: `Este ${fieldToCheck.toUpperCase()} já está cadastrado.` });
@@ -178,7 +177,7 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
                 return;
             }
 
-            const docRef = doc(db, 'transportadoras', identifier);
+            const docRef = doc(db, 'clientes_expedicao', identifier);
             await setDoc(docRef, {
                 ...formData,
                 cnpj: formData.cnpj?.replace(/\D/g, '') || '',
@@ -186,12 +185,12 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
                 status: 'ativo',
             });
             
-            toast({ title: 'Transportadora Criada!', description: 'A nova transportadora foi adicionada com sucesso.' });
+            toast({ title: 'Cliente Criado!', description: 'O novo cliente foi adicionado com sucesso.' });
             onSaveSuccess();
             handleClose();
 
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar a transportadora.' });
+            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar o cliente.' });
         } finally {
             setSaving(false);
         }
@@ -227,8 +226,8 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
 
                 <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
                     <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Adicionar Nova Transportadora</h2>
-                        <p className="text-sm text-muted-foreground">Preencha os detalhes abaixo para criar um nova transportadora.</p>
+                        <h2 className="text-2xl font-semibold text-foreground">Adicionar Novo Cliente</h2>
+                        <p className="text-sm text-muted-foreground">Preencha os detalhes abaixo para criar um novo cliente.</p>
                     </div>
                     <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-foreground hover:bg-muted">
                         <X className="h-5 w-5" />
@@ -236,7 +235,7 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
                 </div>
                 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreate)} className="flex flex-col flex-1 overflow-hidden">
+                    <form onSubmit={form.handleSubmit(handleCreateClient)} className="flex flex-col flex-1 overflow-hidden">
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <CollapsibleCard title="Tipo de Pessoa" defaultOpen={true}>
                                 <FormField
@@ -364,7 +363,7 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
                             </Button>
                             <Button type="submit" variant="default" className="transition-transform duration-200 hover:scale-105" disabled={saving}>
                                 <Save className="mr-2 h-4 w-4" />
-                                {saving ? 'Salvando...' : 'Salvar Transportadora'}
+                                {saving ? 'Salvando Cliente...' : 'Salvar Cliente'}
                             </Button>
                         </div>
                     </form>
@@ -373,4 +372,4 @@ export const NewCarrierForm = forwardRef<NewCarrierFormHandle, NewCarrierFormPro
         </div>
     );
 });
-NewCarrierForm.displayName = 'NewCarrierForm';
+NewClientForm.displayName = "NewClientForm";

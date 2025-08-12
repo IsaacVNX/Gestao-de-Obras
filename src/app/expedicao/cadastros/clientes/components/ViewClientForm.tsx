@@ -78,7 +78,7 @@ export function ViewClientForm(props: ViewClientFormProps) {
         if (!initialClient.id) return;
         setLoading(true);
         try {
-            const clientDocRef = doc(db, 'clientes', initialClient.id);
+            const clientDocRef = doc(db, 'clientes_expedicao', initialClient.id);
             const docSnap = await getDoc(clientDocRef);
             if (docSnap.exists()) {
                 setClient({ id: docSnap.id, ...docSnap.data() } as Cliente);
@@ -94,9 +94,8 @@ export function ViewClientForm(props: ViewClientFormProps) {
     },[initialClient.id, props, toast]);
 
     const handleEditSaveSuccess = () => {
-        props.onSaveSuccess(); // Refreshes the list in the parent component
-        fetchClientData(); // Refreshes the data in the current view
-        setEditModeOpen(false);
+        props.onSaveSuccess();
+        handleClose();
     };
 
     useEffect(() => {

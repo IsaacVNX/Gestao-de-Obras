@@ -44,48 +44,50 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { NewProductForm, type NewProductFormHandle } from './NewProductForm';
-import { ViewProductForm } from './ViewProductForm';
+import { NewCarrierForm, type NewCarrierFormHandle } from './NewCarrierForm';
+import { ViewCarrierForm } from './ViewCarrierForm';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-
-export type Produto = {
+export type Transportadora = {
     id: string;
-    nome: string;
-    sku: string;
-    valor: number;
+    tipoPessoa: 'juridica' | 'fisica';
+    razaoSocial?: string;
+    nomeFantasia?: string;
+    nomeCompleto?: string;
+    cnpj?: string;
+    cpf?: string;
+    telefone: string;
+    email: string;
     status: 'ativo' | 'inativo';
 };
 
 type SortConfig = {
-    key: keyof Produto;
+    key: keyof Transportadora | 'nome';
     direction: 'ascending' | 'descending';
 };
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 30, 50, 100];
 
-export function ProductManagement() {
+export function CarrierManagement() {
     const { user } = useAuth();
     const router = useRouter();
     const { setIsLoading } = useLoading();
     const { toast } = useToast();
     
-    const [produtos, setProdutos] = useState<Produto[]>([]);
+    const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'ativo' | 'inativo' | 'todos'>('ativo');
-    const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+    const [selectedCarriers, setSelectedCarriers] = useState<string[]>([]);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'nome', direction: 'ascending' });
     const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
-    
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [viewingProduct, setViewingProduct] = useState<Produto | null>(null);
+    const [viewingCarrier, setViewingCarrier] = useState<Transportadora | null>(null);
+
     const [isClosing, setIsClosing] = useState(false);
-    const newProductFormRef = useRef<NewProductFormHandle>(null);
-    
-    const canManage = user?.role === 'admin' || user?.role === 'gestor';
+    const newCarrierFormRef = useRef<NewCarrierFormHandle>(null);
 
     const handleOpenCreateModal = () => {
         setCreateModalOpen(true);
@@ -99,104 +101,119 @@ export function ProductManagement() {
         }, 500);
     };
     
-    const handleOpenViewModal = (product: Produto) => {
-        setViewingProduct(product);
+    const handleOpenViewModal = (carrier: Transportadora) => {
+        setViewingCarrier(carrier);
     };
 
     const handleCloseViewModal = () => {
-        setViewingProduct(null);
+        setViewingCarrier(null);
     };
 
-    const fetchProducts = async () => {
+    const canManage = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
+
+    const fetchCarriers = async () => {
         setLoading(true);
         try {
-            const productsSnapshot = await getDocs(collection(db, 'produtos'));
-            const productsList = productsSnapshot.docs.map(doc => {
+            const carriersSnapshot = await getDocs(collection(db, 'transportadoras_expedicao'));
+            const carriersList = carriersSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
                     id: doc.id, 
                     status: data.status || 'ativo',
+                    tipoPessoa: data.tipoPessoa || 'juridica',
                     ...data 
-                } as Produto;
+                } as Transportadora;
             });
-            setProdutos(productsList);
+            setTransportadoras(carriersList);
         } catch (error) {
-            console.error("Erro ao buscar produtos:", error);
-            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os produtos.' });
+            console.error("Erro ao buscar transportadoras:", error);
+            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar as transportadoras.' });
         } finally {
             setLoading(false);
         }
     }
 
     useEffect(() => {
-        fetchProducts();
+        fetchCarriers();
     }, [toast]);
     
-    const handleDelete = async (productId: string) => {
+    const handleDelete = async (carrierId: string) => {
         try {
-            await deleteDoc(doc(db, 'produtos', productId));
-            setProdutos(prev => prev.filter(p => p.id !== productId));
-            setSelectedProducts(prev => prev.filter(id => id !== productId));
-            toast({ title: 'Produto Excluído', description: 'O produto foi removido com sucesso.' });
+            await deleteDoc(doc(db, 'transportadoras_expedicao', carrierId));
+            setTransportadoras(prev => prev.filter(c => c.id !== carrierId));
+            setSelectedCarriers(prev => prev.filter(id => id !== carrierId));
+            toast({ title: 'Transportadora Excluída', description: 'A transportadora foi removida com sucesso.' });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o produto.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover a transportadora.' });
         }
     };
     
-    const handleToggleStatus = async (productIds: string[], newStatus: 'ativo' | 'inativo') => {
+    const handleToggleStatus = async (carrierIds: string[], newStatus: 'ativo' | 'inativo') => {
         const batch = writeBatch(db);
-        productIds.forEach(id => {
-            const productRef = doc(db, 'produtos', id);
-            batch.update(productRef, { status: newStatus });
+        carrierIds.forEach(id => {
+            const carrierRef = doc(db, 'transportadoras_expedicao', id);
+            batch.update(carrierRef, { status: newStatus });
         });
 
         try {
             await batch.commit();
-            setProdutos(prev => prev.map(p => productIds.includes(p.id) ? { ...p, status: newStatus } : p));
-            setSelectedProducts([]);
-            toast({ title: 'Status Atualizado', description: `Produto(s) foram marcados como ${newStatus === 'ativo' ? 'ativos' : 'inativos'}.` });
+            setTransportadoras(prev => prev.map(c => carrierIds.includes(c.id) ? { ...c, status: newStatus } : c));
+            setSelectedCarriers([]);
+            toast({ title: 'Status Atualizado', description: `Transportadora(s) foram marcadas como ${newStatus === 'ativo' ? 'ativas' : 'inativas'}.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status do(s) produto(s).' });
+            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status da(s) transportadora(s).' });
         }
     };
 
     const handleBulkDelete = async () => {
         const batch = writeBatch(db);
-        selectedProducts.forEach(id => {
-            batch.delete(doc(db, 'produtos', id));
+        selectedCarriers.forEach(id => {
+            batch.delete(doc(db, 'transportadoras_expedicao', id));
         });
 
         try {
             await batch.commit();
-            setProdutos(prev => prev.filter(p => !selectedProducts.includes(p.id)));
-            setSelectedProducts([]);
-            toast({ title: 'Produtos Excluídos', description: `${selectedProducts.length} produtos foram removidos com sucesso.` });
+            setTransportadoras(prev => prev.filter(c => !selectedCarriers.includes(c.id)));
+            setSelectedCarriers([]);
+            toast({ title: 'Transportadoras Excluídas', description: `${selectedCarriers.length} transportadoras foram removidas com sucesso.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover os produtos selecionados.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover as transportadoras selecionadas.' });
         }
     };
 
-    const filteredAndSortedProducts = useMemo(() => {
-        let filtered = produtos;
+    const filteredAndSortedCarriers = useMemo(() => {
+        let filtered = transportadoras;
 
         if (activeTab !== 'todos') {
-            filtered = filtered.filter(p => p.status === activeTab);
+            filtered = filtered.filter(c => c.status === activeTab);
         }
 
         if (searchTerm) {
             const lowerCaseTerm = searchTerm.toLowerCase();
-            filtered = filtered.filter(p => 
-                p.nome.toLowerCase().includes(lowerCaseTerm) ||
-                p.sku.toLowerCase().includes(lowerCaseTerm)
-            );
+            filtered = filtered.filter(c => {
+                const nome = c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto;
+                const documento = c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf;
+                return (nome && nome.toLowerCase().includes(lowerCaseTerm)) ||
+                       (documento && documento.includes(lowerCaseTerm));
+            });
         }
         
         if (sortConfig !== null) {
             filtered.sort((a, b) => {
-                if (a[sortConfig.key] < b[sortConfig.key]) {
+                const aValue = sortConfig.key === 'nome' 
+                    ? (a.tipoPessoa === 'juridica' ? a.razaoSocial : a.nomeCompleto) 
+                    : a[sortConfig.key as keyof Transportadora];
+                const bValue = sortConfig.key === 'nome'
+                    ? (b.tipoPessoa === 'juridica' ? b.razaoSocial : b.nomeCompleto)
+                    : b[sortConfig.key as keyof Transportadora];
+                
+                if (aValue === undefined || aValue === null) return 1;
+                if (bValue === undefined || bValue === null) return -1;
+                
+                if (aValue < bValue) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
                 }
-                if (a[sortConfig.key] > b[sortConfig.key]) {
+                if (aValue > bValue) {
                     return sortConfig.direction === 'ascending' ? 1 : -1;
                 }
                 return 0;
@@ -204,9 +221,9 @@ export function ProductManagement() {
         }
         
         return filtered;
-    }, [produtos, activeTab, searchTerm, sortConfig]);
+    }, [transportadoras, activeTab, searchTerm, sortConfig]);
 
-    const requestSort = (key: keyof Produto) => {
+    const requestSort = (key: keyof Transportadora | 'nome') => {
         let direction: 'ascending' | 'descending' = 'ascending';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
             direction = 'descending';
@@ -214,7 +231,7 @@ export function ProductManagement() {
         setSortConfig({ key, direction });
     };
 
-    const getSortIcon = (key: keyof Produto) => {
+    const getSortIcon = (key: keyof Transportadora | 'nome') => {
         if (!sortConfig || sortConfig.key !== key) {
             return <ArrowUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />;
         }
@@ -223,48 +240,45 @@ export function ProductManagement() {
     
     const counts = useMemo(() => {
         return {
-            ativo: produtos.filter(p => p.status === 'ativo').length,
-            inativo: produtos.filter(p => p.status === 'inativo').length,
-            todos: produtos.length,
+            ativo: transportadoras.filter(c => c.status === 'ativo').length,
+            inativo: transportadoras.filter(c => c.status === 'inativo').length,
+            todos: transportadoras.length,
         }
-    }, [produtos]);
+    }, [transportadoras]);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedProducts(filteredAndSortedProducts.map(p => p.id));
+            setSelectedCarriers(filteredAndSortedCarriers.map(c => c.id));
         } else {
-            setSelectedProducts([]);
+            setSelectedCarriers([]);
         }
     };
     
     const handleSelect = (id: string, checked: boolean) => {
         if (checked) {
-            setSelectedProducts(prev => [...prev, id]);
+            setSelectedCarriers(prev => [...prev, id]);
         } else {
-            setSelectedProducts(prev => prev.filter(productId => productId !== id));
+            setSelectedCarriers(prev => prev.filter(carrierId => carrierId !== id));
         }
     };
 
-    const isAllSelected = selectedProducts.length > 0 && selectedProducts.length === filteredAndSortedProducts.length;
-
-    const totalPages = Math.ceil(filteredAndSortedProducts.length / itemsPerPage);
-    const paginatedProducts = filteredAndSortedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-    };
+    const isAllSelected = selectedCarriers.length > 0 && selectedCarriers.length === filteredAndSortedCarriers.length;
+    
+    const totalPages = Math.ceil(filteredAndSortedCarriers.length / itemsPerPage);
+    const paginatedCarriers = filteredAndSortedCarriers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
-        const tableData = filteredAndSortedProducts.map(p => [
-            p.nome || '',
-            p.sku || '',
-            formatCurrency(p.valor),
-            p.status || '',
+        const tableData = filteredAndSortedCarriers.map(c => [
+            (c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto) || '',
+            (c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf) || '',
+            c.email || '',
+            c.telefone || '',
+            c.status || '',
         ]);
 
         autoTable(doc, {
-            head: [['Produto', 'SKU', 'Valor', 'Situação']],
+            head: [['Nome/Razão Social', 'CPF/CNPJ', 'E-mail', 'Telefone', 'Situação']],
             body: tableData,
             didDrawPage: (data) => {
                 doc.setFontSize(16);
@@ -297,29 +311,30 @@ export function ProductManagement() {
         if (action === 'print') {
             doc.output('dataurlnewwindow');
         } else {
-            doc.save('relatorio_produtos.pdf');
+            doc.save('relatorio_transportadoras_expedicao.pdf');
         }
     };
 
     const handlePrint = () => {
-        generatePDF('Relatório de Produtos', 'print');
+        generatePDF('Relatório de Transportadoras (Expedição)', 'print');
     };
 
     const handleExportPDF = () => {
-        generatePDF('Relatório de Produtos', 'save');
+        generatePDF('Relatório de Transportadoras (Expedição)', 'save');
     };
 
     const handleExportExcel = () => {
-        const dataToExport = filteredAndSortedProducts.map(p => ({
-            "Produto": p.nome,
-            "SKU": p.sku,
-            "Valor": p.valor,
-            "Status": p.status,
+        const dataToExport = filteredAndSortedCarriers.map(c => ({
+            "Nome/Razão Social": c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
+            "CPF/CNPJ": c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
+            "Email": c.email,
+            "Telefone": c.telefone,
+            "Status": c.status,
         }));
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Produtos');
-        XLSX.writeFile(workbook, 'relatorio_produtos.xlsx');
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Transportadoras');
+        XLSX.writeFile(workbook, 'relatorio_transportadoras_expedicao.xlsx');
     };
 
     const showDevelopmentToast = () => {
@@ -348,7 +363,7 @@ export function ProductManagement() {
                         className="transition-transform duration-200 hover:scale-105"
                     >
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Novo Produto
+                        Nova Transportadora
                     </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -371,11 +386,11 @@ export function ProductManagement() {
                     </DropdownMenu>
                 </div>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-4 space-y-4">
                         <div className="relative flex-grow">
                             <Input 
-                                placeholder="Pesquisar por produto ou SKU"
+                                placeholder="Pesquisar por nome, razão social, CPF ou CNPJ"
                                 className="pl-4 pr-10 bg-white border-gray-300 text-black"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -398,74 +413,76 @@ export function ProductManagement() {
                             </button>
                         </div>
 
-                        {canManage && selectedProducts.length > 1 && (
+                        {canManage && selectedCarriers.length > 1 && (
                             <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
-                                <span className="text-sm text-black">{selectedProducts.length} registro(s) selecionado(s)</span>
+                                <span className="text-sm text-black">{selectedCarriers.length} registro(s) selecionado(s)</span>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button variant="link" className="p-0 h-auto text-sm text-destructive">Excluir</Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
-                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedProducts.length} produto(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
+                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedCarriers.length} transportadora(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
                                         <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleBulkDelete}>Confirmar</AlertDialogAction></AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
                                 {activeTab === 'ativo' && (
-                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedProducts, 'inativo')}>Inativar</Button>
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'inativo')}>Inativar</Button>
                                 )}
                                 {activeTab === 'inativo' && (
-                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedProducts, 'ativo')}>Reativar</Button>
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'ativo')}>Reativar</Button>
                                 )}
                             </div>
                         )}
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-0">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Produto {getSortIcon('nome')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('sku')}>SKU {getSortIcon('sku')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('valor')}>Valor {getSortIcon('valor')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManage && <TableHead className="text-right text-black"></TableHead>}
+                                    {canManage && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     [...Array(5)].map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={canManage ? 6 : 5}><Skeleton className="h-6 w-full" /></TableCell>
+                                            <TableCell colSpan={canManage ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
                                         </TableRow>
                                     ))
-                                ) : paginatedProducts.length > 0 ? (
-                                    paginatedProducts.map(product => (
-                                        <TableRow key={product.id}>
-                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedProducts.includes(product.id)} onCheckedChange={(checked) => handleSelect(product.id, !!checked)} /></TableCell>
-                                            <TableCell className="font-medium text-black">{product.nome}</TableCell>
-                                            <TableCell className="text-black">{product.sku}</TableCell>
-                                            <TableCell className="text-black">{formatCurrency(product.valor)}</TableCell>
+                                ) : paginatedCarriers.length > 0 ? (
+                                    paginatedCarriers.map(carrier => (
+                                        <TableRow key={carrier.id}>
+                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedCarriers.includes(carrier.id)} onCheckedChange={(checked) => handleSelect(carrier.id, !!checked)} /></TableCell>
+                                            <TableCell className="font-medium text-black">{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}</TableCell>
+                                            <TableCell className="text-black">{carrier.tipoPessoa === 'juridica' ? carrier.cnpj : carrier.cpf}</TableCell>
+                                            <TableCell className="text-black">{carrier.email}</TableCell>
+                                            <TableCell className="text-black">{carrier.telefone}</TableCell>
                                             <TableCell>
-                                                <Badge variant={product.status === 'ativo' ? 'default' : 'secondary'} className={cn(product.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{product.status}</Badge>
+                                                <Badge variant={carrier.status === 'ativo' ? 'default' : 'secondary'} className={cn(carrier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{carrier.status}</Badge>
                                             </TableCell>
                                             {canManage && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(product)}>
+                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(carrier)}>
                                                             <Eye className="mr-2 h-4 w-4" /> Visualizar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
-                                                        {product.status === 'ativo' ? (
-                                                            <DropdownMenuItem onClick={() => handleToggleStatus([product.id], 'inativo')}>
+                                                        {carrier.status === 'ativo' ? (
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'inativo')}>
                                                                 <UserX className="mr-2 h-4 w-4" /> Inativar
                                                             </DropdownMenuItem>
                                                         ) : (
-                                                            <DropdownMenuItem onClick={() => handleToggleStatus([product.id], 'ativo')}>
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'ativo')}>
                                                                 <UserCheck className="mr-2 h-4 w-4" /> Reativar
                                                             </DropdownMenuItem>
                                                         )}
@@ -479,12 +496,12 @@ export function ProductManagement() {
                                                                 <AlertDialogHeader>
                                                                     <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                                                     <AlertDialogDescription>
-                                                                        Tem certeza que deseja excluir o produto "{product.nome}"? Esta ação é permanente.
+                                                                        Tem certeza que deseja excluir a transportadora "{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}"? Esta ação é permanente.
                                                                     </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDelete(product.id)}>Confirmar</AlertDialogAction>
+                                                                    <AlertDialogAction onClick={() => handleDelete(carrier.id)}>Confirmar</AlertDialogAction>
                                                                 </AlertDialogFooter>
                                                             </AlertDialogContent>
                                                         </AlertDialog>
@@ -496,7 +513,7 @@ export function ProductManagement() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={canManage ? 6 : 5} className="text-center h-24 text-black">Nenhum produto encontrado.</TableCell>
+                                        <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhuma transportadora encontrada.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
@@ -524,7 +541,7 @@ export function ProductManagement() {
                                 <span>Registros por página</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedProducts.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedProducts.length)} de {filteredAndSortedProducts.length} registros</span>
+                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedCarriers.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedCarriers.length)} de {filteredAndSortedCarriers.length} registros</span>
                                 <div className="flex items-center gap-1">
                                     <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
                                     <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>
@@ -552,22 +569,22 @@ export function ProductManagement() {
                 <DialogContent 
                     onEscapeKeyDown={(e) => {
                         e.preventDefault();
-                        newProductFormRef.current?.handleAttemptClose();
+                        newCarrierFormRef.current?.handleAttemptClose();
                     }} 
                     className="p-0 border-0 inset-0"
                 >
-                    <NewProductForm ref={newProductFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchProducts} isClosing={isClosing} handleClose={handleCloseCreateModal} />
+                    <NewCarrierForm ref={newCarrierFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchCarriers} isClosing={isClosing} handleClose={handleCloseCreateModal}/>
                 </DialogContent>
             </Dialog>
-            
-            {viewingProduct && (
-                <Dialog open={!!viewingProduct} onOpenChange={(open) => { if (!open) handleCloseViewModal(); }}>
+
+            {viewingCarrier && (
+                <Dialog open={!!viewingCarrier} onOpenChange={(open) => !open && handleCloseViewModal()}>
                     <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 inset-0">
-                        <ViewProductForm 
-                            product={viewingProduct}
+                        <ViewCarrierForm 
+                            carrier={viewingCarrier} 
                             setOpen={(open) => !open && handleCloseViewModal()} 
                             onSaveSuccess={() => {
-                                fetchProducts();
+                                fetchCarriers();
                             }}
                         />
                     </DialogContent>

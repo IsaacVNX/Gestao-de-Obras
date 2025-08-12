@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
@@ -143,7 +142,7 @@ export const NewSupplierForm = forwardRef<NewSupplierFormHandle, NewSupplierForm
         const cnpjDigits = formData.cnpj.replace(/\D/g, '');
         
         try {
-            const cnpjQuery = query(collection(db, 'fornecedores'), where('cnpj', '==', cnpjDigits));
+            const cnpjQuery = query(collection(db, 'fornecedores_expedicao'), where('cnpj', '==', cnpjDigits));
             const cnpjQuerySnapshot = await getDocs(cnpjQuery);
             if (!cnpjQuerySnapshot.empty) {
                 toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Este CNPJ já está cadastrado.' });
@@ -151,7 +150,7 @@ export const NewSupplierForm = forwardRef<NewSupplierFormHandle, NewSupplierForm
                 return;
             }
 
-            const docRef = doc(db, 'fornecedores', cnpjDigits);
+            const docRef = doc(db, 'fornecedores_expedicao', cnpjDigits);
             await setDoc(docRef, {
                 ...formData,
                 cnpj: cnpjDigits,

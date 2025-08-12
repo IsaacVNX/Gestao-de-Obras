@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Paperclip, Info, ChevronUp, Edit, X } from 'lucide-react';
+import { Paperclip, Info, ChevronUp, Edit, X, Download } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { EditProductForm, type EditFormHandle } from './EditProductForm';
 import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
+import { PhotoViewer } from '@/components/PhotoViewer';
 
 const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => (
     <Card className="shadow-lg bg-white text-black border-border">
@@ -49,7 +50,7 @@ const InputWithUnit = ({ value, unit, disabled, id }: { value: any, unit: string
 );
 
 interface ViewProductFormProps {
-    product: Produto;
+    product: Produto & { [key: string]: any };
     setOpen: (open: boolean) => void;
     onSaveSuccess: () => void;
 }
@@ -61,11 +62,12 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
     const [isClosing, setIsClosing] = useState(false);
     const [isEditModeOpen, setEditModeOpen] = useState(false);
     const editFormRef = useRef<EditFormHandle>(null);
+    const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
     
     const fetchProductData = useCallback(async () => {
         setLoading(true);
         try {
-            const docRef = doc(db, 'produtos', initialProduct.id);
+            const docRef = doc(db, 'produtos_expedicao', initialProduct.id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 setProduct({ id: docSnap.id, ...docSnap.data() } as Produto & { fotos?: any[] });
@@ -93,9 +95,17 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
 
     const handleEditSaveSuccess = () => {
         onSaveSuccess();
-        fetchProductData();
-        setEditModeOpen(false);
+        handleClose();
     };
+
+    const handleDownload = (url: string, name?: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name || 'foto-produto';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
     const formatFileSize = (bytes?: number) => {
         if (bytes === undefined) return '';
@@ -108,15 +118,17 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
     
     if (loading || !product) {
         return (
-            <div className="flex flex-col h-full bg-[#ededed]">
-                <div className="p-6 flex-row items-center justify-between border-b bg-white shadow-md">
-                    <h2 className="text-2xl font-semibold text-foreground">Carregando Dados...</h2>
-                    <p className="text-sm text-muted-foreground">Aguarde enquanto carregamos as informações.</p>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <Skeleton className="h-32 w-full rounded-lg" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
+            <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+                <div className="flex flex-col h-full bg-[#ededed]">
+                    <div className="p-6 flex-row items-center justify-between border-b bg-white shadow-md">
+                        <h2 className="text-2xl font-semibold text-foreground">Carregando Dados...</h2>
+                        <p className="text-sm text-muted-foreground">Aguarde enquanto carregamos as informações.</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <Skeleton className="h-32 w-full rounded-lg" />
+                        <Skeleton className="h-64 w-full rounded-lg" />
+                        <Skeleton className="h-64 w-full rounded-lg" />
+                    </div>
                 </div>
             </div>
         );
@@ -127,7 +139,7 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
              <div className="w-full flex flex-col h-full bg-[#ededed]">
                 <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
                     <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Visualizar Produto</h2>
+                        <h2 className="text-2xl font-semibold text-foreground">Visualizar Produto (Expedição)</h2>
                         <p className="text-sm text-muted-foreground">
                              Visualize os detalhes do produto. Clique em Editar para modificar.
                         </p>
@@ -142,19 +154,25 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="col-span-3 sm:col-span-1">
                                 <label className="text-sm font-medium leading-none text-black">Nome do Produto</label>
-                                <Input id="nome" value={product.nome} disabled className="bg-background text-black border-border mt-2" />
+                                <Input id="nome" value={product.nome ?? ''} disabled className="bg-background text-black border-border mt-2" />
                             </div>
                              <div>
                                 <label className="text-sm font-medium leading-none text-black">SKU (Código)</label>
-                                <Input id="sku" value={product.sku} disabled className="bg-background text-black border-border mt-2" />
+                                <Input id="sku" value={product.sku ?? ''} disabled className="bg-background text-black border-border mt-2" />
                             </div>
                             <div>
                                 <label className="text-sm font-medium leading-none text-black">Valor (R$)</label>
-                                <Input id="valor" type="number" value={product.valor} disabled className="bg-background text-black border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none mt-2"/>
+                                <Input id="valor" type="number" value={product.valor ?? ''} disabled className="bg-background text-black border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none mt-2"/>
                             </div>
-                            <div>
+                             <div>
                                 <label className="text-sm font-medium leading-none text-black">Unidade de Medida</label>
-                                <Input id="unidadeMedida" value={(product as any).unidadeMedida || ''} disabled className="bg-background text-black border-border mt-2" />
+                                <Select value={product.unidadeMedida || ''} disabled>
+                                    <SelectTrigger id="unidadeMedida" className="bg-background text-black border-border mt-2"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="PÇ">PÇ</SelectItem>
+                                        <SelectItem value="UND">UND</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <label className="text-sm font-medium leading-none text-black">Status</label>
@@ -199,27 +217,33 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
                             <div className="md:col-span-9 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
                                     <label className="text-sm font-medium leading-none text-black">Altura</label>
-                                    <InputWithUnit id="altura" value={(product as any).altura} unit="cm" disabled/>
+                                    <InputWithUnit id="altura" value={(product as any).altura ?? ''} unit="cm" disabled/>
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium leading-none text-black">Largura</label>
-                                    <InputWithUnit id="largura" value={(product as any).largura} unit="cm" disabled/>
+                                    <InputWithUnit id="largura" value={(product as any).largura ?? ''} unit="cm" disabled/>
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium leading-none text-black">Profundidade</label>
-                                    <InputWithUnit id="profundidade" value={(product as any).profundidade} unit="cm" disabled/>
+                                    <InputWithUnit id="profundidade" value={(product as any).profundidade ?? ''} unit="cm" disabled/>
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium leading-none text-black">Volumes</label>
-                                    <Input id="volumes" type="number" value={(product as any).volumes} disabled className="bg-background text-black border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="volumes" type="number" value={(product as any).volumes ?? ''} disabled className="bg-background text-black border-border [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium leading-none text-black">Peso Líquido</label>
-                                    <InputWithUnit id="pesoLiquido" value={(product as any).pesoLiquido} unit="kg" disabled/>
+                                    <InputWithUnit id="pesoLiquido" value={(product as any).pesoLiquido ?? ''} unit="kg" disabled/>
                                 </div>
+                                {product.unidadeMedida === 'PÇ' && (
+                                    <div>
+                                        <label className="text-sm font-medium leading-none text-black">Metragem Linear</label>
+                                        <InputWithUnit id="metroLinear" value={(product as any).metroLinear ?? ''} unit="m" disabled/>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="text-sm font-medium leading-none text-black">Peso Bruto</label>
-                                    <InputWithUnit id="pesoBruto" value={(product as any).pesoBruto} unit="kg" disabled/>
+                                    <InputWithUnit id="pesoBruto" value={(product as any).pesoBruto ?? ''} unit="kg" disabled/>
                                 </div>
                             </div>
                             <div className="md:col-span-3 flex items-center justify-center">
@@ -231,20 +255,35 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
                     <CollapsibleCard title="Fotos">
                         <div className="p-4 rounded-md border bg-white text-black">
                             <div className="grid grid-cols-12 gap-4 px-2 py-1 text-sm font-medium text-black">
-                                <div className="col-span-6 flex items-center">Foto</div>
-                                <div className="col-span-6">Descrição</div>
+                                <div className="col-span-5 flex items-center">Foto</div>
+                                <div className="col-span-5">Descrição</div>
+                                <div className="col-span-2 text-right">Ações</div>
                             </div>
                             <hr className="my-2 border-border" />
                             <div className="space-y-2">
                                 {product.fotos && product.fotos.length > 0 ? product.fotos.map((foto, index) => (
                                     <div key={index} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md bg-black/5">
-                                        <div className="col-span-6 flex items-center gap-2 text-sm text-black">
+                                        <div className="col-span-5 flex items-center gap-2 text-sm text-black">
                                             <Paperclip className="h-4 w-4" />
-                                            <span className="truncate">{foto.name || 'Foto Carregada'}</span>
+                                            <button type="button" onClick={() => setViewingPhotoUrl(foto.url)} className="truncate hover:underline">
+                                               {foto.name || 'Visualizar Foto'}
+                                            </button>
                                             {foto.size && <span className="text-xs text-muted-foreground">({formatFileSize(foto.size)})</span>}
                                         </div>
-                                        <div className="col-span-6">
+                                        <div className="col-span-5">
                                             <Input value={foto.description || ''} disabled className="bg-background text-black border-border h-9" />
+                                        </div>
+                                        <div className="col-span-2 flex justify-end">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                         <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-black hover:text-black hover:bg-black/10" onClick={() => handleDownload(foto.url, foto.name)}>
+                                                            <Download className="h-4 w-4"/>
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="bg-background text-foreground"><p>Baixar</p></TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                         </div>
                                     </div>
                                 )) : (
@@ -278,6 +317,10 @@ export function ViewProductForm({ product: initialProduct, setOpen, onSaveSucces
                 >
                     <EditProductForm ref={editFormRef} product={product} onSaveSuccess={handleEditSaveSuccess} setOpen={setEditModeOpen} />
                 </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!viewingPhotoUrl} onOpenChange={(open) => !open && setViewingPhotoUrl(null)} >
+              <DialogContent className="z-50"><PhotoViewer imageUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} /></DialogContent>
             </Dialog>
         </div>
     );

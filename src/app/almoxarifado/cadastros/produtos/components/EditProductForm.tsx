@@ -1,11 +1,10 @@
-
 'use client';
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,10 +12,11 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Trash2, Paperclip, Info, ChevronUp, Save, X, AlertTriangle } from 'lucide-react';
+import { Upload, Trash2, Paperclip, Info, ChevronUp, Save, X, AlertTriangle, Download } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import type { Produto } from './ProductManagement';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +26,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { PhotoViewer } from '@/components/PhotoViewer';
 
 const photoSchema = z.object({
   url: z.string().min(1, "A URL da foto é obrigatória."),
@@ -40,7 +41,7 @@ const productSchema = z.object({
     sku: z.string().min(1, "O SKU é obrigatório."),
     valor: z.coerce.number().min(0.01, "O valor deve ser maior que zero."),
     unidadeMedida: z.string().min(1, "A unidade de medida é obrigatória."),
-    status: z.enum(['ativo', 'inativo']).optional(),
+    status: z.enum(['ativo', 'inativo']),
     observacoes: z.string().optional(),
     
     cest: z.string().optional(),
@@ -67,7 +68,7 @@ const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: strin
                     <ChevronUp className="h-5 w-5 text-black transition-transform duration-300 group-data-[state=open]:rotate-180" />
                 </CardHeader>
             </CollapsibleTrigger>
-            <CollapsibleContent className="data-[state=open]:animate-slide-down-slow">
+            <CollapsibleContent>
                 <CardContent>{children}</CardContent>
             </CollapsibleContent>
         </Collapsible>
@@ -92,50 +93,52 @@ const InputWithUnit = ({ field, unit, disabled, id }: { field: any, unit: string
     </div>
 );
 
-export interface NewProductFormHandle {
+export interface EditFormHandle {
     handleAttemptClose: () => void;
 }
 
-interface NewProductFormProps {
-    open: boolean;
+interface EditProductFormProps {
+    product: Produto;
     setOpen: (open: boolean) => void;
     onSaveSuccess: () => void;
-    isClosing: boolean;
-    handleClose: () => void;
 }
 
-
-export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormProps>(({ open, setOpen, onSaveSuccess, isClosing, handleClose }, ref) => {
+export const EditProductForm = forwardRef<EditFormHandle, EditProductFormProps>(({ product, onSaveSuccess, setOpen }, ref) => {
     const { toast } = useToast();
     
     const [saving, setSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isAlertOpen, setAlertOpen] = useState(false);
+    const [isClosing, setIsClosing] = useState(false);
+    const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+
 
     const form = useForm<z.infer<typeof productSchema>>({
         resolver: zodResolver(productSchema),
         defaultValues: {
-            nome: '',
-            sku: '',
-            valor: 0,
-            unidadeMedida: '',
-            status: 'ativo',
-            observacoes: '',
-            cest: '',
-            ncm: '',
-            tipoProduto: '',
-            origem: '',
-            altura: '',
-            largura: '',
-            profundidade: '',
-            volumes: '',
-            pesoLiquido: '',
-            pesoBruto: '',
-            fotos: [],
+            ...product,
+            altura: product.altura ?? '',
+            largura: product.largura ?? '',
+            profundidade: product.profundidade ?? '',
+            volumes: product.volumes ?? '',
+            pesoLiquido: product.pesoLiquido ?? '',
+            pesoBruto: product.pesoBruto ?? '',
         },
     });
 
     const { formState: { isDirty } } = form;
+
+    const { fields, append, remove } = useFieldArray({
+        control: form.control,
+        name: 'fotos',
+    });
+    
+    const handleClose = () => {
+        setIsClosing(true);
+        setTimeout(() => {
+            setOpen(false);
+        }, 500); 
+    };
 
     const handleAttemptClose = () => {
         if (isDirty) {
@@ -144,15 +147,10 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
             handleClose();
         }
     };
-
+    
     useImperativeHandle(ref, () => ({
         handleAttemptClose,
     }));
-
-    const { fields, append, remove } = useFieldArray({
-        control: form.control,
-        name: 'fotos',
-    });
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -187,6 +185,15 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
         reader.readAsDataURL(file);
     };
 
+    const handleDownload = (url: string, name?: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name || 'foto-produto';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
     const formatFileSize = (bytes?: number) => {
         if (bytes === undefined) return '';
         if (bytes === 0) return '0 Bytes';
@@ -196,23 +203,12 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
-    const handleCreate = async (formData: z.infer<typeof productSchema>) => {
+    const handleUpdate = async (formData: z.infer<typeof productSchema>) => {
         setSaving(true);
         try {
-            const sku = formData.sku;
-            const q = query(collection(db, 'produtos'), where('sku', '==', sku));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                 toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Este SKU já está cadastrado.' });
-                 setSaving(false);
-                 return;
-            }
-
-            const docRef = doc(db, 'produtos', sku);
-            await setDoc(docRef, {
+            const docRef = doc(db, 'produtos_almoxarifado', product.id);
+            await updateDoc(docRef, {
                 ...formData,
-                status: 'ativo',
                 altura: formData.altura || null,
                 largura: formData.largura || null,
                 profundidade: formData.profundidade || null,
@@ -221,13 +217,13 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                 pesoBruto: formData.pesoBruto || null,
             });
             
-            toast({ title: 'Produto Criado!', description: 'O novo produto foi adicionado com sucesso.' });
+            toast({ title: 'Produto Atualizado!', description: 'O produto foi atualizado com sucesso.' });
             onSaveSuccess();
             handleClose();
 
         } catch (error: any) {
-            console.error("Create error: ", error);
-            toast({ variant: 'destructive', title: 'Erro de Criação', description: 'Ocorreu um erro ao criar o produto.' });
+            console.error("Update error: ", error);
+            toast({ variant: 'destructive', title: 'Erro de Atualização', description: 'Ocorreu um erro ao atualizar o produto.' });
         } finally {
             setSaving(false);
         }
@@ -239,17 +235,9 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
         }
     }
     
-    useEffect(() => {
-        if (!open) {
-            form.reset();
-            remove(); // Clear photos array
-        }
-    }, [open, form, remove]);
-
-
     return (
         <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
-            <div className="w-full flex flex-col h-full bg-[#ededed]">
+             <div className="w-full flex flex-col h-full bg-[#ededed]">
                 <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
@@ -268,19 +256,20 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
-
                 <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
                     <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Adicionar Novo Produto</h2>
-                        <p className="text-sm text-muted-foreground">Preencha os detalhes abaixo para criar um novo produto.</p>
+                        <h2 className="text-2xl font-semibold text-foreground">Editar Produto</h2>
+                        <p className="text-sm text-muted-foreground">
+                             Modifique os detalhes do produto abaixo.
+                        </p>
                     </div>
                     <Button type="button" variant="ghost" size="icon" onClick={handleAttemptClose} className="rounded-full text-foreground hover:bg-muted">
                         <X className="h-5 w-5" />
                     </Button>
                 </div>
-                
+
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleCreate)} onKeyDown={checkEnter} className="flex flex-col flex-1 overflow-hidden">
+                    <form onSubmit={(e) => { e.preventDefault(); form.handleSubmit(handleUpdate)(); }} onKeyDown={checkEnter} className="flex flex-col flex-1 overflow-hidden">
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <CollapsibleCard title="Informações Básicas">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -294,7 +283,7 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                                     <FormField control={form.control} name="sku" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel htmlFor="sku" className="text-black">SKU (Código)</FormLabel>
-                                            <FormControl><Input id="sku" {...field} disabled={saving} className="bg-background text-black border-border" /></FormControl>
+                                            <FormControl><Input id="sku" {...field} disabled={true} className="bg-background text-black border-border" /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
@@ -315,7 +304,7 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                                     <FormField control={form.control} name="status" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel htmlFor="status" className="text-black">Status</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value} disabled={true}>
+                                            <Select onValueChange={field.onChange} value={field.value} disabled={saving}>
                                                 <FormControl>
                                                     <SelectTrigger id="status" className="bg-background text-black border-border"><SelectValue placeholder="Selecione um status" /></SelectTrigger>
                                                 </FormControl>
@@ -425,7 +414,7 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                             <CollapsibleCard title="Fotos">
                                 <div className="p-4 rounded-md border bg-white text-black">
                                     <div className="grid grid-cols-12 gap-4 px-2 py-1 text-sm font-medium text-black">
-                                        <div className="col-span-6 flex items-center">
+                                        <div className="col-span-5 flex items-center">
                                             Foto
                                             <TooltipProvider>
                                                 <Tooltip>
@@ -441,16 +430,19 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                                                 </Tooltip>
                                             </TooltipProvider>
                                         </div>
-                                        <div className="col-span-6">Descrição</div>
+                                        <div className="col-span-5">Descrição</div>
+                                        <div className="col-span-2 text-right">Ações</div>
                                     </div>
                                     <hr className="my-2 border-border" />
                                     <div className="space-y-2">
                                         {fields.map((field, index) => (
                                             <div key={field.id} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md bg-black/5">
-                                                <div className="col-span-6 flex items-center gap-2 text-sm text-black">
+                                                <div className="col-span-5 flex items-center gap-2 text-sm text-black">
                                                     <Paperclip className="h-4 w-4" />
-                                                    <span className="truncate">{field.name}</span>
-                                                    <span className="text-xs text-muted-foreground">({formatFileSize(field.size)})</span>
+                                                    <button type="button" onClick={() => setViewingPhotoUrl(field.url)} className="truncate hover:underline">
+                                                      {field.name || 'Visualizar Foto'}
+                                                    </button>
+                                                    {field.size && <span className="text-xs text-muted-foreground">({formatFileSize(field.size)})</span>}
                                                 </div>
                                                 <div className="col-span-5">
                                                     <FormField
@@ -464,11 +456,21 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                                                         )}
                                                     />
                                                 </div>
-                                                <div className="col-span-1 flex justify-end gap-1">
+                                                <div className="col-span-2 flex justify-end gap-1">
+                                                     <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-black hover:text-black hover:bg-black/10" onClick={() => handleDownload(field.url, field.name)} disabled={saving}>
+                                                                    <Download className="h-4 w-4"/>
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="bg-background text-foreground"><p>Baixar</p></TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                     <TooltipProvider>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/20 hover:text-destructive" onClick={() => remove(index)}>
+                                                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/20 hover:text-destructive" onClick={() => remove(index)} disabled={saving}>
                                                                     <Trash2 className="h-4 w-4"/>
                                                                 </Button>
                                                             </TooltipTrigger>
@@ -486,7 +488,7 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                                     </div>
                                     <hr className="my-2 border-border" />
                                     <div className="pt-2">
-                                        <Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} className="text-black hover:bg-black/10 hover:text-black">
+                                        <Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} className="text-black hover:bg-black/10 hover:text-black" disabled={saving}>
                                             <Upload className="mr-2 h-4 w-4" />
                                             Adicionar Foto
                                         </Button>
@@ -499,15 +501,18 @@ export const NewProductForm = forwardRef<NewProductFormHandle, NewProductFormPro
                             <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>
                                 Cancelar
                             </Button>
-                            <Button type="submit" variant="default" className="transition-transform duration-200 hover:scale-105" disabled={saving}>
+                            <Button type="submit" variant="default" className="transition-transform duration-200 hover:scale-105" disabled={saving || !isDirty}>
                                 <Save className="mr-2 h-4 w-4" />
-                                {saving ? 'Salvando...' : 'Salvar Produto'}
+                                {saving ? 'Salvando...' : 'Salvar Alterações'}
                             </Button>
                         </div>
                     </form>
                 </Form>
             </div>
+            
+            <PhotoViewer imageUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} />
+
         </div>
     );
 });
-NewProductForm.displayName = 'NewProductForm';
+EditProductForm.displayName = 'EditProductForm';

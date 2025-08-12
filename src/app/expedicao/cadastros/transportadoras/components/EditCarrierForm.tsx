@@ -156,7 +156,7 @@ export const EditCarrierForm = forwardRef<EditFormHandle, EditCarrierFormProps>(
                 cpf: formData.cpf?.replace(/\D/g, '') || '',
             };
 
-            const docRef = doc(db, 'transportadoras', carrier.id);
+            const docRef = doc(db, 'transportadoras_expedicao', carrier.id);
             await updateDoc(docRef, dataToUpdate);
             
             toast({ title: 'Transportadora Atualizada!', description: 'Os dados foram atualizados com sucesso.' });
@@ -205,7 +205,7 @@ export const EditCarrierForm = forwardRef<EditFormHandle, EditCarrierFormProps>(
                 </div>
                 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleUpdate)} className="flex flex-col flex-1 overflow-hidden">
+                    <form onSubmit={(e) => { e.preventDefault(); form.handleSubmit(handleUpdate)(); }} className="flex flex-col flex-1 overflow-hidden">
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <CollapsibleCard title="Tipo de Pessoa" defaultOpen={true}>
                                 <FormField

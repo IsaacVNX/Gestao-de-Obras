@@ -344,7 +344,7 @@ export function UserManagement() {
     }
 
     return (
-     <Card className="bg-[#d1d1d1]">
+     <Card className="bg-white">
       {/* Mobile View: List of Cards */}
        <div className="md:hidden">
           <div className="space-y-4 p-4 max-w-md mx-auto">
@@ -490,7 +490,7 @@ export function UserManagement() {
             {canCreateUser && (
             <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
                 <DialogTrigger asChild>
-                    <Button className="transition-all duration-300 ease-in-out hover:scale-105">
+                    <Button onClick={() => setCreateModalOpen(true)} className="transition-all duration-300 ease-in-out hover:scale-105">
                         <PlusCircle className="mr-2 h-4 w-4" />
                         Novo Usuário
                     </Button>
@@ -535,7 +535,7 @@ export function UserManagement() {
         </div>
 
         {/* Filter Area */}
-        <Card className="bg-[#d1d1d1]">
+        <Card className="bg-white">
             <CardContent className="p-4 space-y-4">
                 <div className="flex items-center gap-4">
                     <div className="relative flex-grow">

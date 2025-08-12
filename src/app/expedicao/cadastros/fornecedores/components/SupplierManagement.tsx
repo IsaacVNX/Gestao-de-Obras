@@ -22,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
@@ -44,50 +45,46 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { NewCarrierForm, type NewCarrierFormHandle } from './NewCarrierForm';
-import { ViewCarrierForm } from './ViewCarrierForm';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { NewSupplierForm, type NewSupplierFormHandle } from './NewSupplierForm';
+import { ViewSupplierForm } from './ViewSupplierForm';
 
-export type Transportadora = {
+export type Fornecedor = {
     id: string;
-    tipoPessoa: 'juridica' | 'fisica';
-    razaoSocial?: string;
-    nomeFantasia?: string;
-    nomeCompleto?: string;
-    cnpj?: string;
-    cpf?: string;
+    razaoSocial: string;
+    nomeFantasia: string;
+    cnpj: string;
     telefone: string;
     email: string;
     status: 'ativo' | 'inativo';
 };
 
 type SortConfig = {
-    key: keyof Transportadora | 'nome';
+    key: keyof Fornecedor;
     direction: 'ascending' | 'descending';
 };
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 30, 50, 100];
 
-export function CarrierManagement() {
+export function SupplierManagement() {
     const { user } = useAuth();
     const router = useRouter();
     const { setIsLoading } = useLoading();
     const { toast } = useToast();
     
-    const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
+    const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'ativo' | 'inativo' | 'todos'>('ativo');
-    const [selectedCarriers, setSelectedCarriers] = useState<string[]>([]);
-    const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'nome', direction: 'ascending' });
+    const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'razaoSocial', direction: 'ascending' });
     const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
     const [currentPage, setCurrentPage] = useState(1);
     const [goToPageInput, setGoToPageInput] = useState('');
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-    const [viewingCarrier, setViewingCarrier] = useState<Transportadora | null>(null);
-
+    const [viewingSupplier, setViewingSupplier] = useState<Fornecedor | null>(null);
     const [isClosing, setIsClosing] = useState(false);
-    const newCarrierFormRef = useRef<NewCarrierFormHandle>(null);
+    const newSupplierFormRef = useRef<NewSupplierFormHandle>(null);
 
     const handleOpenCreateModal = () => {
         setCreateModalOpen(true);
@@ -101,119 +98,107 @@ export function CarrierManagement() {
         }, 500);
     };
     
-    const handleOpenViewModal = (carrier: Transportadora) => {
-        setViewingCarrier(carrier);
+    const handleOpenViewModal = (supplier: Fornecedor) => {
+        setViewingSupplier(supplier);
     };
 
     const handleCloseViewModal = () => {
-        setViewingCarrier(null);
+        setViewingSupplier(null);
     };
 
     const canManage = user?.role === 'admin' || user?.role === 'gestor' || user?.role === 'escritorio';
 
-    const fetchCarriers = async () => {
+    const fetchSuppliers = async () => {
         setLoading(true);
         try {
-            const carriersSnapshot = await getDocs(collection(db, 'transportadoras'));
-            const carriersList = carriersSnapshot.docs.map(doc => {
+            const suppliersSnapshot = await getDocs(collection(db, 'fornecedores_expedicao'));
+            const suppliersList = suppliersSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
                     id: doc.id, 
                     status: data.status || 'ativo',
-                    tipoPessoa: data.tipoPessoa || 'juridica',
                     ...data 
-                } as Transportadora;
+                } as Fornecedor;
             });
-            setTransportadoras(carriersList);
+            setFornecedores(suppliersList);
         } catch (error) {
-            console.error("Erro ao buscar transportadoras:", error);
-            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar as transportadoras.' });
+            console.error("Erro ao buscar fornecedores:", error);
+            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os fornecedores.' });
         } finally {
             setLoading(false);
         }
     }
 
     useEffect(() => {
-        fetchCarriers();
+        fetchSuppliers();
     }, [toast]);
     
-    const handleDelete = async (carrierId: string) => {
+    const handleDelete = async (supplierId: string) => {
         try {
-            await deleteDoc(doc(db, 'transportadoras', carrierId));
-            setTransportadoras(prev => prev.filter(c => c.id !== carrierId));
-            setSelectedCarriers(prev => prev.filter(id => id !== carrierId));
-            toast({ title: 'Transportadora Excluída', description: 'A transportadora foi removida com sucesso.' });
+            await deleteDoc(doc(db, 'fornecedores_expedicao', supplierId));
+            setFornecedores(prev => prev.filter(s => s.id !== supplierId));
+            setSelectedSuppliers(prev => prev.filter(id => id !== supplierId));
+            toast({ title: 'Fornecedor Excluído', description: 'O fornecedor foi removido com sucesso.' });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover a transportadora.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover o fornecedor.' });
         }
     };
     
-    const handleToggleStatus = async (carrierIds: string[], newStatus: 'ativo' | 'inativo') => {
+    const handleToggleStatus = async (supplierIds: string[], newStatus: 'ativo' | 'inativo') => {
         const batch = writeBatch(db);
-        carrierIds.forEach(id => {
-            const carrierRef = doc(db, 'transportadoras', id);
-            batch.update(carrierRef, { status: newStatus });
+        supplierIds.forEach(id => {
+            const supplierRef = doc(db, 'fornecedores_expedicao', id);
+            batch.update(supplierRef, { status: newStatus });
         });
 
         try {
             await batch.commit();
-            setTransportadoras(prev => prev.map(c => carrierIds.includes(c.id) ? { ...c, status: newStatus } : c));
-            setSelectedCarriers([]);
-            toast({ title: 'Status Atualizado', description: `Transportadora(s) foram marcadas como ${newStatus === 'ativo' ? 'ativas' : 'inativas'}.` });
+            setFornecedores(prev => prev.map(s => supplierIds.includes(s.id) ? { ...s, status: newStatus } : s));
+            setSelectedSuppliers([]);
+            toast({ title: 'Status Atualizado', description: `Fornecedor(es) foram marcados como ${newStatus === 'ativo' ? 'ativos' : 'inativos'}.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status da(s) transportadora(s).' });
+            toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: 'Não foi possível alterar o status do(s) fornecedor(es).' });
         }
     };
 
     const handleBulkDelete = async () => {
         const batch = writeBatch(db);
-        selectedCarriers.forEach(id => {
-            batch.delete(doc(db, 'transportadoras', id));
+        selectedSuppliers.forEach(id => {
+            batch.delete(doc(db, 'fornecedores_expedicao', id));
         });
 
         try {
             await batch.commit();
-            setTransportadoras(prev => prev.filter(c => !selectedCarriers.includes(c.id)));
-            setSelectedCarriers([]);
-            toast({ title: 'Transportadoras Excluídas', description: `${selectedCarriers.length} transportadoras foram removidas com sucesso.` });
+            setFornecedores(prev => prev.filter(s => !selectedSuppliers.includes(s.id)));
+            setSelectedSuppliers([]);
+            toast({ title: 'Fornecedores Excluídos', description: `${selectedSuppliers.length} fornecedores foram removidos com sucesso.` });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover as transportadoras selecionadas.' });
+            toast({ variant: 'destructive', title: 'Erro ao Excluir', description: 'Não foi possível remover os fornecedores selecionados.' });
         }
     };
 
-    const filteredAndSortedCarriers = useMemo(() => {
-        let filtered = transportadoras;
+    const filteredAndSortedSuppliers = useMemo(() => {
+        let filtered = fornecedores;
 
         if (activeTab !== 'todos') {
-            filtered = filtered.filter(c => c.status === activeTab);
+            filtered = filtered.filter(s => s.status === activeTab);
         }
 
         if (searchTerm) {
             const lowerCaseTerm = searchTerm.toLowerCase();
-            filtered = filtered.filter(c => {
-                const nome = c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto;
-                const documento = c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf;
-                return (nome && nome.toLowerCase().includes(lowerCaseTerm)) ||
-                       (documento && documento.includes(lowerCaseTerm));
-            });
+            filtered = filtered.filter(s => 
+                s.razaoSocial.toLowerCase().includes(lowerCaseTerm) ||
+                s.nomeFantasia.toLowerCase().includes(lowerCaseTerm) ||
+                s.cnpj.toLowerCase().includes(lowerCaseTerm)
+            );
         }
         
         if (sortConfig !== null) {
             filtered.sort((a, b) => {
-                const aValue = sortConfig.key === 'nome' 
-                    ? (a.tipoPessoa === 'juridica' ? a.razaoSocial : a.nomeCompleto) 
-                    : a[sortConfig.key as keyof Transportadora];
-                const bValue = sortConfig.key === 'nome'
-                    ? (b.tipoPessoa === 'juridica' ? b.razaoSocial : b.nomeCompleto)
-                    : b[sortConfig.key as keyof Transportadora];
-                
-                if (aValue === undefined || aValue === null) return 1;
-                if (bValue === undefined || bValue === null) return -1;
-                
-                if (aValue < bValue) {
+                if (a[sortConfig.key] < b[sortConfig.key]) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
                 }
-                if (aValue > bValue) {
+                if (a[sortConfig.key] > b[sortConfig.key]) {
                     return sortConfig.direction === 'ascending' ? 1 : -1;
                 }
                 return 0;
@@ -221,9 +206,9 @@ export function CarrierManagement() {
         }
         
         return filtered;
-    }, [transportadoras, activeTab, searchTerm, sortConfig]);
+    }, [fornecedores, activeTab, searchTerm, sortConfig]);
 
-    const requestSort = (key: keyof Transportadora | 'nome') => {
+    const requestSort = (key: keyof Fornecedor) => {
         let direction: 'ascending' | 'descending' = 'ascending';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
             direction = 'descending';
@@ -231,7 +216,7 @@ export function CarrierManagement() {
         setSortConfig({ key, direction });
     };
 
-    const getSortIcon = (key: keyof Transportadora | 'nome') => {
+    const getSortIcon = (key: keyof Fornecedor) => {
         if (!sortConfig || sortConfig.key !== key) {
             return <ArrowUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />;
         }
@@ -240,45 +225,45 @@ export function CarrierManagement() {
     
     const counts = useMemo(() => {
         return {
-            ativo: transportadoras.filter(c => c.status === 'ativo').length,
-            inativo: transportadoras.filter(c => c.status === 'inativo').length,
-            todos: transportadoras.length,
+            ativo: fornecedores.filter(s => s.status === 'ativo').length,
+            inativo: fornecedores.filter(s => s.status === 'inativo').length,
+            todos: fornecedores.length,
         }
-    }, [transportadoras]);
+    }, [fornecedores]);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedCarriers(filteredAndSortedCarriers.map(c => c.id));
+            setSelectedSuppliers(filteredAndSortedSuppliers.map(s => s.id));
         } else {
-            setSelectedCarriers([]);
+            setSelectedSuppliers([]);
         }
     };
     
     const handleSelect = (id: string, checked: boolean) => {
         if (checked) {
-            setSelectedCarriers(prev => [...prev, id]);
+            setSelectedSuppliers(prev => [...prev, id]);
         } else {
-            setSelectedCarriers(prev => prev.filter(carrierId => carrierId !== id));
+            setSelectedSuppliers(prev => prev.filter(supplierId => supplierId !== id));
         }
     };
 
-    const isAllSelected = selectedCarriers.length > 0 && selectedCarriers.length === filteredAndSortedCarriers.length;
-    
-    const totalPages = Math.ceil(filteredAndSortedCarriers.length / itemsPerPage);
-    const paginatedCarriers = filteredAndSortedCarriers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const isAllSelected = selectedSuppliers.length > 0 && selectedSuppliers.length === filteredAndSortedSuppliers.length;
+
+    const totalPages = Math.ceil(filteredAndSortedSuppliers.length / itemsPerPage);
+    const paginatedSuppliers = filteredAndSortedSuppliers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const generatePDF = (title: string, action: 'save' | 'print') => {
         const doc = new jsPDF();
-        const tableData = filteredAndSortedCarriers.map(c => [
-            (c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto) || '',
-            (c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf) || '',
-            c.email || '',
-            c.telefone || '',
-            c.status || '',
+        const tableData = filteredAndSortedSuppliers.map(s => [
+            s.razaoSocial || '',
+            s.cnpj || '',
+            s.email || '',
+            s.telefone || '',
+            s.status || '',
         ]);
 
         autoTable(doc, {
-            head: [['Nome/Razão Social', 'CPF/CNPJ', 'E-mail', 'Telefone', 'Situação']],
+            head: [['Nome', 'CNPJ', 'E-mail', 'Telefone', 'Situação']],
             body: tableData,
             didDrawPage: (data) => {
                 doc.setFontSize(16);
@@ -311,30 +296,23 @@ export function CarrierManagement() {
         if (action === 'print') {
             doc.output('dataurlnewwindow');
         } else {
-            doc.save('relatorio_transportadoras.pdf');
+            doc.save('relatorio_fornecedores_expedicao.pdf');
         }
     };
 
     const handlePrint = () => {
-        generatePDF('Relatório de Transportadoras', 'print');
+        generatePDF('Relatório de Fornecedores (Expedição)', 'print');
     };
 
     const handleExportPDF = () => {
-        generatePDF('Relatório de Transportadoras', 'save');
+        generatePDF('Relatório de Fornecedores (Expedição)', 'save');
     };
 
     const handleExportExcel = () => {
-        const dataToExport = filteredAndSortedCarriers.map(c => ({
-            "Nome/Razão Social": c.tipoPessoa === 'juridica' ? c.razaoSocial : c.nomeCompleto,
-            "CPF/CNPJ": c.tipoPessoa === 'juridica' ? c.cnpj : c.cpf,
-            "Email": c.email,
-            "Telefone": c.telefone,
-            "Status": c.status,
-        }));
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const worksheet = XLSX.utils.json_to_sheet(filteredAndSortedSuppliers);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Transportadoras');
-        XLSX.writeFile(workbook, 'relatorio_transportadoras.xlsx');
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Fornecedores');
+        XLSX.writeFile(workbook, 'relatorio_fornecedores_expedicao.xlsx');
     };
 
     const showDevelopmentToast = () => {
@@ -363,7 +341,7 @@ export function CarrierManagement() {
                         className="transition-transform duration-200 hover:scale-105"
                     >
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Nova Transportadora
+                        Novo Fornecedor
                     </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -386,11 +364,11 @@ export function CarrierManagement() {
                     </DropdownMenu>
                 </div>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-4 space-y-4">
                         <div className="relative flex-grow">
                             <Input 
-                                placeholder="Pesquisar por nome, razão social, CPF ou CNPJ"
+                                placeholder="Pesquisar por razão social, nome fantasia ou CNPJ"
                                 className="pl-4 pr-10 bg-white border-gray-300 text-black"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -413,41 +391,41 @@ export function CarrierManagement() {
                             </button>
                         </div>
 
-                        {canManage && selectedCarriers.length > 1 && (
+                        {canManage && selectedSuppliers.length > 1 && (
                             <div className="bg-blue-50 p-3 rounded-md flex items-center gap-4">
-                                <span className="text-sm text-black">{selectedCarriers.length} registro(s) selecionado(s)</span>
+                                <span className="text-sm text-black">{selectedSuppliers.length} registro(s) selecionado(s)</span>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button variant="link" className="p-0 h-auto text-sm text-destructive">Excluir</Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
-                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedCarriers.length} transportadora(s)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
+                                        <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir {selectedSuppliers.length} fornecedor(es)? Esta ação é permanente.</AlertDialogDescription></AlertDialogHeader>
                                         <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleBulkDelete}>Confirmar</AlertDialogAction></AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
                                 {activeTab === 'ativo' && (
-                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'inativo')}>Inativar</Button>
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedSuppliers, 'inativo')}>Inativar</Button>
                                 )}
                                 {activeTab === 'inativo' && (
-                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedCarriers, 'ativo')}>Reativar</Button>
+                                    <Button variant="link" className="p-0 h-auto text-sm text-black" onClick={() => handleToggleStatus(selectedSuppliers, 'ativo')}>Reativar</Button>
                                 )}
                             </div>
                         )}
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-0">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('razaoSocial')}>Nome {getSortIcon('razaoSocial')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManage && <TableHead className="text-right text-black"></TableHead>}
+                                    {canManage && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -457,32 +435,32 @@ export function CarrierManagement() {
                                             <TableCell colSpan={canManage ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
                                         </TableRow>
                                     ))
-                                ) : paginatedCarriers.length > 0 ? (
-                                    paginatedCarriers.map(carrier => (
-                                        <TableRow key={carrier.id}>
-                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedCarriers.includes(carrier.id)} onCheckedChange={(checked) => handleSelect(carrier.id, !!checked)} /></TableCell>
-                                            <TableCell className="font-medium text-black">{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}</TableCell>
-                                            <TableCell className="text-black">{carrier.tipoPessoa === 'juridica' ? carrier.cnpj : carrier.cpf}</TableCell>
-                                            <TableCell className="text-black">{carrier.email}</TableCell>
-                                            <TableCell className="text-black">{carrier.telefone}</TableCell>
+                                ) : paginatedSuppliers.length > 0 ? (
+                                    paginatedSuppliers.map(supplier => (
+                                        <TableRow key={supplier.id}>
+                                            <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedSuppliers.includes(supplier.id)} onCheckedChange={(checked) => handleSelect(supplier.id, !!checked)} /></TableCell>
+                                            <TableCell className="font-medium text-black">{supplier.razaoSocial}</TableCell>
+                                            <TableCell className="text-black">{supplier.cnpj}</TableCell>
+                                            <TableCell className="text-black">{supplier.email}</TableCell>
+                                            <TableCell className="text-black">{supplier.telefone}</TableCell>
                                             <TableCell>
-                                                <Badge variant={carrier.status === 'ativo' ? 'default' : 'secondary'} className={cn(carrier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{carrier.status}</Badge>
+                                                <Badge variant={supplier.status === 'ativo' ? 'default' : 'secondary'} className={cn(supplier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{supplier.status}</Badge>
                                             </TableCell>
                                             {canManage && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="link" className="text-black p-0 h-auto">Ações <ChevronDown className="ml-1 h-4 w-4"/></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(carrier)}>
+                                                        <DropdownMenuItem onClick={() => handleOpenViewModal(supplier)}>
                                                             <Eye className="mr-2 h-4 w-4" /> Visualizar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
-                                                        {carrier.status === 'ativo' ? (
-                                                            <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'inativo')}>
+                                                        {supplier.status === 'ativo' ? (
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([supplier.id], 'inativo')}>
                                                                 <UserX className="mr-2 h-4 w-4" /> Inativar
                                                             </DropdownMenuItem>
                                                         ) : (
-                                                            <DropdownMenuItem onClick={() => handleToggleStatus([carrier.id], 'ativo')}>
+                                                            <DropdownMenuItem onClick={() => handleToggleStatus([supplier.id], 'ativo')}>
                                                                 <UserCheck className="mr-2 h-4 w-4" /> Reativar
                                                             </DropdownMenuItem>
                                                         )}
@@ -496,12 +474,12 @@ export function CarrierManagement() {
                                                                 <AlertDialogHeader>
                                                                     <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                                                     <AlertDialogDescription>
-                                                                        Tem certeza que deseja excluir a transportadora "{carrier.tipoPessoa === 'juridica' ? carrier.razaoSocial : carrier.nomeCompleto}"? Esta ação é permanente.
+                                                                        Tem certeza que deseja excluir o fornecedor "{supplier.razaoSocial}"? Esta ação é permanente.
                                                                     </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDelete(carrier.id)}>Confirmar</AlertDialogAction>
+                                                                    <AlertDialogAction onClick={() => handleDelete(supplier.id)}>Confirmar</AlertDialogAction>
                                                                 </AlertDialogFooter>
                                                             </AlertDialogContent>
                                                         </AlertDialog>
@@ -513,7 +491,7 @@ export function CarrierManagement() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhuma transportadora encontrada.</TableCell>
+                                        <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhum fornecedor encontrado.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
@@ -541,7 +519,7 @@ export function CarrierManagement() {
                                 <span>Registros por página</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedCarriers.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedCarriers.length)} de {filteredAndSortedCarriers.length} registros</span>
+                                <span>Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndSortedSuppliers.length)} - {Math.min(currentPage * itemsPerPage, filteredAndSortedSuppliers.length)} de {filteredAndSortedSuppliers.length} registros</span>
                                 <div className="flex items-center gap-1">
                                     <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
                                     <Button variant="outline" size="sm" className="bg-white" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>Anterior</Button>
@@ -569,22 +547,22 @@ export function CarrierManagement() {
                 <DialogContent 
                     onEscapeKeyDown={(e) => {
                         e.preventDefault();
-                        newCarrierFormRef.current?.handleAttemptClose();
-                    }} 
+                        newSupplierFormRef.current?.handleAttemptClose();
+                    }}
                     className="p-0 border-0 inset-0"
                 >
-                    <NewCarrierForm ref={newCarrierFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchCarriers} isClosing={isClosing} handleClose={handleCloseCreateModal}/>
+                    <NewSupplierForm ref={newSupplierFormRef} open={isCreateModalOpen} setOpen={setCreateModalOpen} onSaveSuccess={fetchSuppliers} isClosing={isClosing} handleClose={handleCloseCreateModal} />
                 </DialogContent>
             </Dialog>
 
-            {viewingCarrier && (
-                <Dialog open={!!viewingCarrier} onOpenChange={(open) => !open && handleCloseViewModal()}>
+            {viewingSupplier && (
+                <Dialog open={!!viewingSupplier} onOpenChange={(open) => !open && handleCloseViewModal()}>
                     <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="p-0 border-0 inset-0">
-                        <ViewCarrierForm 
-                            carrier={viewingCarrier} 
+                        <ViewSupplierForm 
+                            supplier={viewingSupplier}
                             setOpen={(open) => !open && handleCloseViewModal()} 
                             onSaveSuccess={() => {
-                                fetchCarriers();
+                                fetchSuppliers();
                             }}
                         />
                     </DialogContent>

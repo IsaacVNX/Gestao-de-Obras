@@ -111,7 +111,7 @@ export function SupplierManagement() {
     const fetchSuppliers = async () => {
         setLoading(true);
         try {
-            const suppliersSnapshot = await getDocs(collection(db, 'fornecedores'));
+            const suppliersSnapshot = await getDocs(collection(db, 'fornecedores_almoxarifado'));
             const suppliersList = suppliersSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
@@ -135,7 +135,7 @@ export function SupplierManagement() {
     
     const handleDelete = async (supplierId: string) => {
         try {
-            await deleteDoc(doc(db, 'fornecedores', supplierId));
+            await deleteDoc(doc(db, 'fornecedores_almoxarifado', supplierId));
             setFornecedores(prev => prev.filter(s => s.id !== supplierId));
             setSelectedSuppliers(prev => prev.filter(id => id !== supplierId));
             toast({ title: 'Fornecedor Excluído', description: 'O fornecedor foi removido com sucesso.' });
@@ -147,7 +147,7 @@ export function SupplierManagement() {
     const handleToggleStatus = async (supplierIds: string[], newStatus: 'ativo' | 'inativo') => {
         const batch = writeBatch(db);
         supplierIds.forEach(id => {
-            const supplierRef = doc(db, 'fornecedores', id);
+            const supplierRef = doc(db, 'fornecedores_almoxarifado', id);
             batch.update(supplierRef, { status: newStatus });
         });
 
@@ -164,7 +164,7 @@ export function SupplierManagement() {
     const handleBulkDelete = async () => {
         const batch = writeBatch(db);
         selectedSuppliers.forEach(id => {
-            batch.delete(doc(db, 'fornecedores', id));
+            batch.delete(doc(db, 'fornecedores_almoxarifado', id));
         });
 
         try {
@@ -296,23 +296,23 @@ export function SupplierManagement() {
         if (action === 'print') {
             doc.output('dataurlnewwindow');
         } else {
-            doc.save('relatorio_fornecedores.pdf');
+            doc.save('relatorio_fornecedores_almoxarifado.pdf');
         }
     };
 
     const handlePrint = () => {
-        generatePDF('Relatório de Fornecedores', 'print');
+        generatePDF('Relatório de Fornecedores (Almoxarifado)', 'print');
     };
 
     const handleExportPDF = () => {
-        generatePDF('Relatório de Fornecedores', 'save');
+        generatePDF('Relatório de Fornecedores (Almoxarifado)', 'save');
     };
 
     const handleExportExcel = () => {
         const worksheet = XLSX.utils.json_to_sheet(filteredAndSortedSuppliers);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Fornecedores');
-        XLSX.writeFile(workbook, 'relatorio_fornecedores.xlsx');
+        XLSX.writeFile(workbook, 'relatorio_fornecedores_almoxarifado.xlsx');
     };
 
     const showDevelopmentToast = () => {
@@ -364,7 +364,7 @@ export function SupplierManagement() {
                     </DropdownMenu>
                 </div>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-4 space-y-4">
                         <div className="relative flex-grow">
                             <Input 
@@ -414,7 +414,7 @@ export function SupplierManagement() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-[#d1d1d1]">
+                <Card className="bg-white">
                     <CardContent className="p-0">
                         <Table>
                             <TableHeader>
@@ -425,7 +425,7 @@ export function SupplierManagement() {
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
                                     <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
-                                    {canManage && <TableHead className="text-right text-black"></TableHead>}
+                                    {canManage && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

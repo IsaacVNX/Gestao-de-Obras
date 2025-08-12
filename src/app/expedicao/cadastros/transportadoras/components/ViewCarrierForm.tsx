@@ -74,7 +74,7 @@ export function ViewCarrierForm(props: ViewCarrierFormProps) {
         if (!initialCarrier.id) return;
         setLoading(true);
         try {
-            const docRef = doc(db, 'transportadoras', initialCarrier.id);
+            const docRef = doc(db, 'transportadoras_expedicao', initialCarrier.id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 setCarrier({ id: docSnap.id, ...docSnap.data() } as Transportadora);
@@ -90,9 +90,8 @@ export function ViewCarrierForm(props: ViewCarrierFormProps) {
     },[initialCarrier.id, props, toast]);
     
     const handleEditSaveSuccess = () => {
-        props.onSaveSuccess(); // Refreshes the list in the parent component
-        fetchCarrierData(); // Refreshes the data in the current view
-        setEditModeOpen(false); 
+        props.onSaveSuccess();
+        handleClose();
     };
 
     useEffect(() => {
@@ -101,15 +100,17 @@ export function ViewCarrierForm(props: ViewCarrierFormProps) {
 
     if (loading || !carrier) {
         return (
-            <div className="flex flex-col h-full bg-[#ededed]">
-                <div className="p-6 flex-row items-center justify-between border-b bg-white shadow-md">
-                    <h2 className="text-2xl font-semibold text-foreground">Carregando Dados...</h2>
-                    <p className="text-sm text-muted-foreground">Aguarde enquanto carregamos as informações.</p>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <Skeleton className="h-32 w-full rounded-lg" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
+            <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+                <div className="flex flex-col h-full bg-[#ededed]">
+                    <div className="p-6 flex-row items-center justify-between border-b bg-white shadow-md">
+                        <h2 className="text-2xl font-semibold text-foreground">Carregando Dados...</h2>
+                        <p className="text-sm text-muted-foreground">Aguarde enquanto carregamos as informações.</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <Skeleton className="h-32 w-full rounded-lg" />
+                        <Skeleton className="h-64 w-full rounded-lg" />
+                        <Skeleton className="h-64 w-full rounded-lg" />
+                    </div>
                 </div>
             </div>
         );

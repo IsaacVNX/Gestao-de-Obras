@@ -2,7 +2,7 @@
 'use client';
 import AppLayout from '@/components/AppLayout';
 import { Suspense } from 'react';
-import { UserManagement } from '@/app/rh/components/UserManagement';
+import { UserManagement } from './components/UserManagement';
 
 function UsuariosContent() {
   return (

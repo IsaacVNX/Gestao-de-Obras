@@ -297,7 +297,7 @@ export function ChecklistForm({ obraId, checklistId, initialData, initialMateria
                 </CardDescription>
               </div>
               {isEditing && (
-                <Button variant="outline" onClick={() => router.push(`/obras/${obraId}/checklist/${checklistId}/history`)}>
+                <Button variant="outline" onClick={() => router.push(`/obras/${obraId}/checklist/${checklistId}/history`)} className="transition-transform duration-200 hover:scale-105">
                     <History className="mr-2 h-4 w-4" />
                     Ver Histórico
                 </Button>

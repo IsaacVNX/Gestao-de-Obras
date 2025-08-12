@@ -73,7 +73,7 @@ export function ViewSupplierForm(props: ViewSupplierFormProps) {
         if (!initialSupplier.id) return;
         setLoading(true);
         try {
-            const docRef = doc(db, 'fornecedores', initialSupplier.id);
+            const docRef = doc(db, 'fornecedores_almoxarifado', initialSupplier.id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 setSupplier({ id: docSnap.id, ...docSnap.data() } as Fornecedor);
@@ -90,8 +90,7 @@ export function ViewSupplierForm(props: ViewSupplierFormProps) {
 
     const handleEditSaveSuccess = () => {
         props.onSaveSuccess();
-        fetchSupplierData();
-        setEditModeOpen(false); 
+        handleClose();
     };
 
     useEffect(() => {
@@ -101,15 +100,17 @@ export function ViewSupplierForm(props: ViewSupplierFormProps) {
 
     if (loading || !supplier) {
         return (
-             <div className="flex flex-col h-full bg-[#ededed]">
-                <div className="p-6 flex-row items-center justify-between border-b bg-white shadow-md">
-                    <h2 className="text-2xl font-semibold text-foreground">Carregando Dados...</h2>
-                    <p className="text-sm text-muted-foreground">Aguarde enquanto carregamos as informações.</p>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <Skeleton className="h-32 w-full rounded-lg" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
+             <div className={cn('h-full w-full flex flex-col', isClosing ? 'animate-slide-down' : 'animate-slide-up')}>
+                <div className="flex flex-col h-full bg-[#ededed]">
+                    <div className="p-6 flex-row items-center justify-between border-b bg-white shadow-md">
+                        <h2 className="text-2xl font-semibold text-foreground">Carregando Dados...</h2>
+                        <p className="text-sm text-muted-foreground">Aguarde enquanto carregamos as informações.</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <Skeleton className="h-32 w-full rounded-lg" />
+                        <Skeleton className="h-64 w-full rounded-lg" />
+                        <Skeleton className="h-64 w-full rounded-lg" />
+                    </div>
                 </div>
             </div>
         );
