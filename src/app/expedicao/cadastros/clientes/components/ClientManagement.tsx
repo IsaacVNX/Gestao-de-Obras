@@ -451,11 +451,11 @@ export function ClientManagement() {
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManageClients} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('documento')}>CPF/CNPJ {getSortIcon('documento')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}><div className="flex items-center gap-2">Nome/Razão Social {getSortIcon('nome')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('documento')}><div className="flex items-center gap-2">CPF/CNPJ {getSortIcon('documento')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}><div className="flex items-center gap-2">E-mail {getSortIcon('email')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}><div className="flex items-center gap-2">Telefone {getSortIcon('telefone')}</div></TableHead>
+                                    {activeTab === 'todos' && <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}><div className="flex items-center gap-2">Situação {getSortIcon('status')}</div></TableHead>}
                                     {canManageClients && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -463,7 +463,7 @@ export function ClientManagement() {
                                 {loading ? (
                                     [...Array(5)].map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={canManageClients ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
+                                            <TableCell colSpan={canManageClients ? (activeTab === 'todos' ? 7 : 6) : (activeTab === 'todos' ? 6 : 5)}><Skeleton className="h-6 w-full" /></TableCell>
                                         </TableRow>
                                     ))
                                 ) : paginatedClients.length > 0 ? (
@@ -474,9 +474,11 @@ export function ClientManagement() {
                                             <TableCell className="text-black">{client.tipoPessoa === 'juridica' ? client.cnpj : client.cpf}</TableCell>
                                             <TableCell className="text-black">{client.email}</TableCell>
                                             <TableCell className="text-black">{client.telefone}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className={cn(client.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{client.status}</Badge>
-                                            </TableCell>
+                                            {activeTab === 'todos' &&
+                                                <TableCell>
+                                                    <Badge variant={client.status === 'ativo' ? 'default' : 'secondary'} className={cn(client.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{client.status}</Badge>
+                                                </TableCell>
+                                            }
                                             {canManageClients && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
@@ -522,7 +524,7 @@ export function ClientManagement() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={canManageClients ? 7 : 6} className="text-center h-24 text-black">Nenhum cliente encontrado.</TableCell>
+                                        <TableCell colSpan={canManageClients ? (activeTab === 'todos' ? 7 : 6) : (activeTab === 'todos' ? 6 : 5)} className="text-center h-24 text-black">Nenhum cliente encontrado.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>

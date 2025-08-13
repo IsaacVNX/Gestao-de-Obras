@@ -442,11 +442,11 @@ export function CarrierManagement() {
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Nome/Razão Social {getSortIcon('nome')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}><div className="flex items-center gap-2">Nome/Razão Social {getSortIcon('nome')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}><div className="flex items-center gap-2">CPF/CNPJ {getSortIcon('cnpj')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}><div className="flex items-center gap-2">E-mail {getSortIcon('email')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}><div className="flex items-center gap-2">Telefone {getSortIcon('telefone')}</div></TableHead>
+                                    {activeTab === 'todos' && <TableHead className="text-black">Situação</TableHead>}
                                     {canManage && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -454,7 +454,7 @@ export function CarrierManagement() {
                                 {loading ? (
                                     [...Array(5)].map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={canManage ? 7 : 6}><Skeleton className="h-6 w-full" /></TableCell>
+                                            <TableCell colSpan={canManage ? (activeTab === 'todos' ? 7 : 6) : (activeTab === 'todos' ? 6 : 5)}><Skeleton className="h-6 w-full" /></TableCell>
                                         </TableRow>
                                     ))
                                 ) : paginatedCarriers.length > 0 ? (
@@ -465,9 +465,11 @@ export function CarrierManagement() {
                                             <TableCell className="text-black">{carrier.tipoPessoa === 'juridica' ? carrier.cnpj : carrier.cpf}</TableCell>
                                             <TableCell className="text-black">{carrier.email}</TableCell>
                                             <TableCell className="text-black">{carrier.telefone}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={carrier.status === 'ativo' ? 'default' : 'secondary'} className={cn(carrier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{carrier.status}</Badge>
-                                            </TableCell>
+                                            {activeTab === 'todos' &&
+                                                <TableCell>
+                                                    <Badge variant={carrier.status === 'ativo' ? 'default' : 'secondary'} className={cn(carrier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{carrier.status}</Badge>
+                                                </TableCell>
+                                            }
                                             {canManage && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
@@ -513,7 +515,7 @@ export function CarrierManagement() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={canManage ? 7 : 6} className="text-center h-24 text-black">Nenhuma transportadora encontrada.</TableCell>
+                                        <TableCell colSpan={canManage ? (activeTab === 'todos' ? 7 : 6) : (activeTab === 'todos' ? 6 : 5)} className="text-center h-24 text-black">Nenhuma transportadora encontrada.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>

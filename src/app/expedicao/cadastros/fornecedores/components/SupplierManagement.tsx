@@ -420,11 +420,11 @@ export function SupplierManagement() {
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('razaoSocial')}>Nome {getSortIcon('razaoSocial')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}>CPF/CNPJ {getSortIcon('cnpj')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}>E-mail {getSortIcon('email')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}>Telefone {getSortIcon('telefone')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('razaoSocial')}><div className="flex items-center gap-2">Nome {getSortIcon('razaoSocial')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('cnpj')}><div className="flex items-center gap-2">CPF/CNPJ {getSortIcon('cnpj')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('email')}><div className="flex items-center gap-2">E-mail {getSortIcon('email')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('telefone')}><div className="flex items-center gap-2">Telefone {getSortIcon('telefone')}</div></TableHead>
+                                    {activeTab === 'todos' && <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}><div className="flex items-center gap-2">Situação {getSortIcon('status')}</div></TableHead>}
                                     {canManage && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -443,9 +443,11 @@ export function SupplierManagement() {
                                             <TableCell className="text-black">{supplier.cnpj}</TableCell>
                                             <TableCell className="text-black">{supplier.email}</TableCell>
                                             <TableCell className="text-black">{supplier.telefone}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={supplier.status === 'ativo' ? 'default' : 'secondary'} className={cn(supplier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{supplier.status}</Badge>
-                                            </TableCell>
+                                            {activeTab === 'todos' && (
+                                                <TableCell>
+                                                    <Badge variant={supplier.status === 'ativo' ? 'default' : 'secondary'} className={cn(supplier.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{supplier.status}</Badge>
+                                                </TableCell>
+                                            )}
                                             {canManage && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>

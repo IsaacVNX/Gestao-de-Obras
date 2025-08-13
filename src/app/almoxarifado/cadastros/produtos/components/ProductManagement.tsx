@@ -55,6 +55,7 @@ export type Produto = {
     sku: string;
     valor: number;
     status: 'ativo' | 'inativo';
+    unidadeMedida: string;
     altura?: string | number;
     largura?: string | number;
     profundidade?: string | number;
@@ -346,6 +347,13 @@ export function ProductManagement() {
         setGoToPageInput('');
     };
 
+    const colSpan = () => {
+        let span = 5;
+        if (canManage) span++;
+        if (activeTab === 'todos') span++;
+        return span;
+    }
+
     return (
         <>
             <div className="space-y-4">
@@ -434,10 +442,11 @@ export function ProductManagement() {
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-12"><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={isAllSelected} onCheckedChange={handleSelectAll} /></TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}>Produto {getSortIcon('nome')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('sku')}>SKU {getSortIcon('sku')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('valor')}>Valor {getSortIcon('valor')}</TableHead>
-                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('status')}>Situação {getSortIcon('status')}</TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('nome')}><div className="flex items-center gap-2">Produto {getSortIcon('nome')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('sku')}><div className="flex items-center gap-2">SKU {getSortIcon('sku')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('unidadeMedida')}><div className="flex items-center gap-2">Unidade {getSortIcon('unidadeMedida')}</div></TableHead>
+                                    <TableHead className="cursor-pointer group text-black" onClick={() => requestSort('valor')}><div className="flex items-center gap-2">Valor {getSortIcon('valor')}</div></TableHead>
+                                    {activeTab === 'todos' && <TableHead className="text-black">Situação</TableHead>}
                                     {canManage && <TableHead className="text-right"></TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -445,7 +454,7 @@ export function ProductManagement() {
                                 {loading ? (
                                     [...Array(5)].map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={canManage ? 6 : 5}><Skeleton className="h-6 w-full" /></TableCell>
+                                            <TableCell colSpan={colSpan()}><Skeleton className="h-6 w-full" /></TableCell>
                                         </TableRow>
                                     ))
                                 ) : paginatedProducts.length > 0 ? (
@@ -454,10 +463,13 @@ export function ProductManagement() {
                                             <TableCell><Checkbox className="border-black data-[state=checked]:bg-black data-[state=checked]:text-white" disabled={!canManage} checked={selectedProducts.includes(product.id)} onCheckedChange={(checked) => handleSelect(product.id, !!checked)} /></TableCell>
                                             <TableCell className="font-medium text-black">{product.nome}</TableCell>
                                             <TableCell className="text-black">{product.sku}</TableCell>
+                                            <TableCell className="text-black">{product.unidadeMedida}</TableCell>
                                             <TableCell className="text-black">{formatCurrency(product.valor)}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={product.status === 'ativo' ? 'default' : 'secondary'} className={cn(product.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{product.status}</Badge>
-                                            </TableCell>
+                                            {activeTab === 'todos' && 
+                                                <TableCell>
+                                                    <Badge variant={product.status === 'ativo' ? 'default' : 'secondary'} className={cn(product.status === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')}>{product.status}</Badge>
+                                                </TableCell>
+                                            }
                                             {canManage && (
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
@@ -503,7 +515,7 @@ export function ProductManagement() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={canManage ? 6 : 5} className="text-center h-24 text-black">Nenhum produto encontrado.</TableCell>
+                                        <TableCell colSpan={colSpan()} className="text-center h-24 text-black">Nenhum produto encontrado.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>

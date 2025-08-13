@@ -128,3 +128,9 @@ input:-webkit-autofill:active {
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .product-search-cell-active > * {
+    position: unset;
+  }
+}

@@ -8,15 +8,25 @@ import { db } from '@/lib/firebase';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField as RHFormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { X, AlertTriangle, Save, ChevronUp, PlusCircle, Trash2 } from 'lucide-react';
+import { X, AlertTriangle, Save, ChevronUp, PlusCircle, Trash2, ChevronDown, Upload, Paperclip, Info, Download } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Cliente } from '@/app/expedicao/cadastros/clientes/components/ClientManagement';
 import type { Produto } from '@/app/expedicao/cadastros/produtos/components/ProductManagement';
+import { Textarea } from '@/components/ui/textarea';
+import { PhotoViewer } from '@/components/PhotoViewer';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+
+const photoSchema = z.object({
+  url: z.string().min(1, "A URL da foto é obrigatória."),
+  description: z.string().optional(),
+  name: z.string().optional(),
+  size: z.number().optional(),
+});
 
 const itemSchema = z.object({
   id: z.string(),
@@ -38,6 +48,8 @@ const romaneioSchema = z.object({
   cidade: z.string(),
   uf: z.string(),
   items: z.array(itemSchema).min(1, "Adicione pelo menos um item ao romaneio."),
+  fotos: z.array(photoSchema).optional(),
+  observacoes: z.string().optional(),
 });
 
 export interface NewEntryFormHandle {
@@ -52,22 +64,14 @@ interface NewEntryFormProps {
   handleClose: () => void;
 }
 
-const CollapsibleCard = ({ title, children, defaultOpen = true }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => (
-    <Card className="shadow-lg bg-white text-black border-border">
-        <Collapsible defaultOpen={defaultOpen}>
-            <CollapsibleTrigger className="w-full group">
-                <CardHeader className="flex flex-row items-center justify-between py-4">
-                    <CardTitleComponent className="text-black">{title}</CardTitleComponent>
-                    <ChevronUp className="h-5 w-5 text-black transition-transform duration-300 group-data-[state=open]:rotate-180" />
-                </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-                <CardContent>{children}</CardContent>
-            </CollapsibleContent>
-        </Collapsible>
+const StaticCard = ({ title, children, className }: { title: string, children: React.ReactNode, className?: string }) => (
+    <Card className={cn("shadow-lg bg-white text-black border-border", className)}>
+        <CardHeader className="flex flex-row items-center justify-between py-4">
+            <CardTitleComponent className="text-black">{title}</CardTitleComponent>
+        </CardHeader>
+        <CardContent>{children}</CardContent>
     </Card>
 );
-
 
 export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({ open, setOpen, onSaveSuccess, isClosing, handleClose }, ref) => {
   const { toast } = useToast();
@@ -78,16 +82,11 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // States for custom client search
-  const [clientSearch, setClientSearch] = useState('');
-  const [filteredClients, setFilteredClients] = useState<Cliente[]>([]);
-  const [isClientListVisible, setClientListVisible] = useState(false);
-  const clientSearchRef = useRef<HTMLDivElement>(null);
+  const [clienteDisplayValue, setClienteDisplayValue] = useState('');
+  
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // States for custom product search
-  const [productSearch, setProductSearch] = useState<{ [index: number]: string }>({});
-  const [filteredProducts, setFilteredProducts] = useState<{ [index: number]: Produto[] }>({});
-  const [isProductListVisible, setProductListVisible] = useState<{ [index: number]: boolean }>({});
   
   const form = useForm<z.infer<typeof romaneioSchema>>({
     resolver: zodResolver(romaneioSchema),
@@ -100,12 +99,19 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
       cidade: '',
       uf: '',
       items: [],
+      fotos: [],
+      observacoes: '',
     },
   });
 
   const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "items",
+  });
+
+  const { fields: photoFields, append: appendPhoto, remove: removePhoto } = useFieldArray({
+    control: form.control,
+    name: "fotos",
   });
 
   const fetchData = useCallback(async () => {
@@ -129,17 +135,6 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Click outside handler for client search
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
-        setClientListVisible(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
   
   const { formState: { isDirty } } = form;
 
@@ -155,45 +150,14 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
     handleAttemptClose,
   }));
 
-  const handleClientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setClientSearch(value);
-    form.setValue('clienteId', ''); // Clear selection if search changes
-    if (value) {
-      const filtered = clientes.filter(c => 
-        (c.nomeCompleto?.toLowerCase().includes(value.toLowerCase())) ||
-        (c.razaoSocial?.toLowerCase().includes(value.toLowerCase())) ||
-        (c.cnpj?.includes(value)) ||
-        (c.cpf?.includes(value))
-      );
-      setFilteredClients(filtered);
-      setClientListVisible(true);
-    } else {
-      setFilteredClients([]);
-      setClientListVisible(false);
-    }
-  };
-
   const handleClientSelect = (cliente: Cliente) => {
     form.setValue('clienteId', cliente.id, { shouldDirty: true });
-    setClientSearch(cliente.nomeCompleto || cliente.razaoSocial || '');
     form.setValue('cnpj', cliente.cnpj || cliente.cpf || '', { shouldDirty: true });
     form.setValue('cidade', (cliente as any).cidade || '', { shouldDirty: true });
     form.setValue('uf', (cliente as any).estado || '', { shouldDirty: true });
-    setClientListVisible(false);
+    setClienteDisplayValue(cliente.razaoSocial || cliente.nomeCompleto || '');
   };
   
-  const handleProductSearchChange = (index: number, value: string) => {
-    setProductSearch(prev => ({...prev, [index]: value}));
-    form.setValue(`items.${index}.produtoId`, ''); // Clear on new search
-    if (value) {
-      const filtered = produtos.filter(p => p.nome.toLowerCase().includes(value.toLowerCase()));
-      setFilteredProducts(prev => ({ ...prev, [index]: filtered }));
-    } else {
-      setFilteredProducts(prev => ({ ...prev, [index]: [] }));
-    }
-  }
-
   const handleProductSelect = (index: number, produto: Produto) => {
     update(index, {
         ...fields[index],
@@ -202,9 +166,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
         metroLinearUnitario: produto.metroLinear || 0,
         pesoBrutoUnitario: produto.pesoBruto || 0,
     });
-    setProductSearch(prev => ({...prev, [index]: produto.nome}));
     calculateTotals(index);
-    setProductListVisible(prev => ({ ...prev, [index]: false }));
   };
 
   const handleQuantityChange = (index: number, quantity: number) => {
@@ -235,6 +197,57 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
         metroLinearTotal: 0,
         pesoTotal: 0,
     });
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    const maxSize = 3 * 1024 * 1024; // 3MB
+
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        variant: 'destructive',
+        title: 'Tipo de arquivo inválido',
+        description: 'Por favor, selecione um arquivo JPG, JPEG, PNG ou WEBP.',
+      });
+      return;
+    }
+
+    if (file.size > maxSize) {
+      toast({
+        variant: 'destructive',
+        title: 'Arquivo muito grande',
+        description: 'O tamanho máximo do arquivo é de 3MB.',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      appendPhoto({ url: dataUrl, name: file.name, size: file.size, description: '' });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownload = (url: string, name?: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name || 'foto-romaneio';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  const formatFileSize = (bytes?: number) => {
+    if (bytes === undefined) return '';
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const handleCreate = async (formData: z.infer<typeof romaneioSchema>) => {
@@ -274,7 +287,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
             </AlertDialogContent>
         </AlertDialog>
 
-        <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-10">
+        <div className="p-6 flex flex-row items-center justify-between border-b bg-white shadow-md sticky top-0 z-20">
           <div>
             <h2 className="text-2xl font-semibold text-foreground">Registrar Entrada (Romaneio)</h2>
             <p className="text-sm text-muted-foreground">Preencha os detalhes do romaneio de entrada.</p>
@@ -287,50 +300,42 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleCreate)} className="flex flex-col flex-1 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <CollapsibleCard title="Cabeçalho do Romaneio">
+              <StaticCard title="Cabeçalho do Romaneio">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField name="clienteId" control={form.control} render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className="text-black">Cliente</FormLabel>
-                        <div ref={clientSearchRef} className="relative">
-                            <FormControl>
-                                <Input 
-                                    placeholder="Busque o cliente pelo nome ou CNPJ/CPF"
-                                    value={clientSearch}
-                                    onChange={handleClientSearchChange}
-                                    className="text-black bg-background border-border"
-                                />
-                            </FormControl>
-                            {isClientListVisible && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                                {filteredClients.length > 0 ? (
-                                filteredClients.map(c => (
-                                    <div
-                                    key={c.id}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer text-black"
-                                    onClick={() => handleClientSelect(c)}
-                                    >
-                                    {c.nomeCompleto || c.razaoSocial}
-                                    </div>
-                                ))
-                                ) : (
-                                <div className="p-2 text-gray-500">Nenhum cliente encontrado.</div>
-                                )}
-                            </div>
+                    <RHFormField control={form.control} name="clienteId" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="text-black">Cliente</FormLabel>
+                        <SearchableSelect
+                            items={clientes}
+                            onSelectItem={handleClientSelect}
+                            displayValue={clienteDisplayValue}
+                            setDisplayValue={setClienteDisplayValue}
+                            renderItem={(item) => (
+                                <div className="flex justify-between w-full">
+                                    <span>{item.razaoSocial || item.nomeCompleto}</span>
+                                    <span className="text-xs text-muted-foreground">{item.cnpj || item.cpf}</span>
+                                </div>
                             )}
-                      </div>
-                      <FormMessage />
+                            filterFunction={(item, query) => (
+                                (item.razaoSocial || '').toLowerCase().includes(query.toLowerCase()) ||
+                                (item.nomeCompleto || '').toLowerCase().includes(query.toLowerCase()) ||
+                                (item.cnpj || '').includes(query) ||
+                                (item.cpf || '').includes(query)
+                            )}
+                            placeholder="Busque o cliente pelo nome ou CNPJ/CPF"
+                        />
+                        <FormMessage />
                     </FormItem>
                   )}/>
-                  <FormField name="cnpj" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">CNPJ/CPF</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border" /></FormControl></FormItem>)}/>
-                  <FormField name="nomeObra" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nome da Obra</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl><FormMessage /></FormItem>)}/>
-                  <FormField name="orcamento" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nº Orçamento</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl></FormItem>)}/>
-                  <FormField name="notaFiscal" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nota Fiscal</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl><FormMessage /></FormItem>)}/>
-                  <FormField name="cidade" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Cidade</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border"/></FormControl></FormItem>)}/>
-                  <FormField name="uf" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">UF</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border"/></FormControl></FormItem>)}/>
+                  <RHFormField name="cnpj" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">CNPJ/CPF</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border" /></FormControl></FormItem>)}/>
+                  <RHFormField name="nomeObra" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nome da Obra</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl><FormMessage /></FormItem>)}/>
+                  <RHFormField name="orcamento" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nº Orçamento</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl></FormItem>)}/>
+                  <RHFormField name="notaFiscal" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nota Fiscal</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl><FormMessage /></FormItem>)}/>
+                  <RHFormField name="cidade" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Cidade</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border"/></FormControl></FormItem>)}/>
+                  <RHFormField name="uf" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">UF</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border"/></FormControl></FormItem>)}/>
                 </div>
-              </CollapsibleCard>
-              <CollapsibleCard title="Itens do Romaneio">
+              </StaticCard>
+              <StaticCard title="Itens do Romaneio">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -347,37 +352,30 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
                                 <TableRow key={item.id}>
                                     <TableCell className="text-black">{index + 1}</TableCell>
                                     <TableCell>
-                                         <FormField name={`items.${index}.produtoId`} control={form.control} render={({ field }) => (
-                                            <div className="relative">
-                                                <FormControl>
-                                                    <Input
-                                                        placeholder="Buscar produto..."
-                                                        value={productSearch[index] || ''}
-                                                        onChange={(e) => handleProductSearchChange(index, e.target.value)}
-                                                        onFocus={() => setProductListVisible(prev => ({...prev, [index]: true}))}
-                                                        onBlur={() => setTimeout(() => setProductListVisible(prev => ({...prev, [index]: false})), 150)}
-                                                        className="text-black bg-background border-border"
-                                                    />
-                                                </FormControl>
-                                                {isProductListVisible[index] && (
-                                                <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                                                    {(filteredProducts[index] || []).length > 0 ? (
-                                                    (filteredProducts[index] || []).map(p => (
-                                                        <div key={p.id} className="p-2 hover:bg-gray-100 cursor-pointer text-black" onClick={() => handleProductSelect(index, p)}>
-                                                            {p.nome}
+                                         <RHFormField name={`items.${index}.produtoId`} control={form.control} render={({ field }) => (
+                                            <FormItem>
+                                                <SearchableSelect
+                                                    items={produtos}
+                                                    onSelectItem={(p) => handleProductSelect(index, p as Produto)}
+                                                    displayValue={item.descricao}
+                                                    renderItem={(p) => (
+                                                        <div className="flex justify-between w-full">
+                                                            <span>{p.nome}</span>
+                                                            <span className="text-xs text-muted-foreground">{p.sku}</span>
                                                         </div>
-                                                    ))
-                                                    ) : (
-                                                    <div className="p-2 text-gray-500">Nenhum produto encontrado.</div>
                                                     )}
-                                                </div>
-                                                )}
+                                                    filterFunction={(p, query) => 
+                                                        p.nome.toLowerCase().includes(query.toLowerCase()) || 
+                                                        p.sku.toLowerCase().includes(query.toLowerCase())
+                                                    }
+                                                    placeholder="Buscar produto por nome ou SKU"
+                                                />
                                                 <FormMessage />
-                                            </div>
+                                            </FormItem>
                                          )}/>
                                     </TableCell>
                                     <TableCell>
-                                        <FormField name={`items.${index}.quantidade`} control={form.control} render={({ field }) => (
+                                        <RHFormField name={`items.${index}.quantidade`} control={form.control} render={({ field }) => (
                                             <Input type="number" {...field} onChange={e => { field.onChange(e); handleQuantityChange(index, e.target.valueAsNumber); }} className="text-black bg-background border-border"/>
                                         )}/>
                                     </TableCell>
@@ -393,7 +391,103 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
                     <Button type="button" variant="outline" onClick={addNewItem} className="mt-4 text-black hover:bg-black/10">
                         <PlusCircle className="mr-2 h-4 w-4"/> Adicionar Item
                     </Button>
-              </CollapsibleCard>
+              </StaticCard>
+              <StaticCard title="Anexar Fotos">
+                <div className="p-4 rounded-md border bg-white text-black">
+                  <div className="grid grid-cols-12 gap-4 px-2 py-1 text-sm font-medium text-black">
+                    <div className="col-span-5 flex items-center">
+                      Foto
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="ml-1.5 cursor-help p-1 rounded-full hover:bg-black/10">
+                              <Info className="h-5 w-5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-background text-foreground">
+                            <p>Arquivos aceitos: jpg, jpeg, png, webp.</p>
+                            <p>Tamanho máximo por arquivo: 3MB.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <div className="col-span-5">Descrição</div>
+                    <div className="col-span-2 text-right">Ações</div>
+                  </div>
+                  <hr className="my-2 border-border" />
+                  <div className="space-y-2">
+                    {photoFields.map((field, index) => (
+                      <div key={field.id} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md bg-black/5">
+                        <div className="col-span-5 flex items-center gap-2 text-sm text-black">
+                          <Paperclip className="h-4 w-4" />
+                          <button type="button" onClick={() => setViewingPhotoUrl(field.url)} className="truncate hover:underline">
+                            {field.name || 'Visualizar Foto'}
+                          </button>
+                          {field.size && <span className="text-xs text-muted-foreground">({formatFileSize(field.size)})</span>}
+                        </div>
+                        <div className="col-span-5">
+                          <RHFormField
+                            control={form.control}
+                            name={`fotos.${index}.description`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl><Input {...field} placeholder="Ex: Nota fiscal" disabled={saving} className="bg-background text-black border-border h-9" /></FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="col-span-2 flex justify-end gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-black hover:text-black hover:bg-black/10" onClick={() => handleDownload(field.url, field.name)} disabled={saving}>
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-background text-foreground"><p>Baixar</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/20 hover:text-destructive" onClick={() => removePhoto(index)} disabled={saving}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-background text-foreground"><p>Excluir</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                    ))}
+                    {photoFields.length === 0 && (
+                      <div className="text-center py-4 text-sm text-muted-foreground">
+                        Nenhuma foto adicionada.
+                      </div>
+                    )}
+                  </div>
+                  <hr className="my-2 border-border" />
+                  <div className="pt-2">
+                    <Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} className="text-black hover:bg-black/10 hover:text-black" disabled={saving}>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Adicionar Foto
+                    </Button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/jpeg,image/png,image/webp,image/jpg" />
+                  </div>
+                </div>
+              </StaticCard>
+
+              <StaticCard title="Observações">
+                 <RHFormField control={form.control} name="observacoes" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="text-black sr-only">Observações</FormLabel>
+                        <FormControl><Textarea {...field} placeholder="Adicione qualquer observação relevante sobre esta entrada..." disabled={saving} className="bg-background text-black border-border min-h-[100px]"/></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}/>
+              </StaticCard>
+
             </div>
             <div className="p-4 flex justify-end gap-2 mt-auto bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t">
               <Button type="button" variant="ghost" onClick={handleAttemptClose} disabled={saving}>Cancelar</Button>
@@ -404,6 +498,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
           </form>
         </Form>
       </div>
+       <PhotoViewer imageUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} />
     </div>
   );
 });
