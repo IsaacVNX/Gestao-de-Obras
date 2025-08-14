@@ -1,3 +1,4 @@
+
 'use client';
 import * as React from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
@@ -18,6 +19,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 
+const INITIAL_VISIBLE_ITEMS = 20;
+
 interface SearchableSelectProps<T> {
   items: T[];
   onSelectItem: (item: T) => void;
@@ -27,6 +30,7 @@ interface SearchableSelectProps<T> {
   displayValue: string;
   setDisplayValue?: (value: string) => void;
   disabled?: boolean;
+  selectedItemId?: string | null;
 }
 
 export function SearchableSelect<T extends { id: string }>({
@@ -37,32 +41,33 @@ export function SearchableSelect<T extends { id: string }>({
   placeholder = 'Selecione um item...',
   displayValue,
   setDisplayValue,
-  disabled = false
+  disabled = false,
+  selectedItemId,
 }: SearchableSelectProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [visibleItemsCount, setVisibleItemsCount] = React.useState(INITIAL_VISIBLE_ITEMS);
 
   const filteredItems = React.useMemo(() => {
     if (!query) return items;
     return items.filter((item) => filterFunction(item, query));
   }, [items, query, filterFunction]);
 
+  const itemsToShow = React.useMemo(() => {
+    return filteredItems.slice(0, visibleItemsCount);
+  }, [filteredItems, visibleItemsCount]);
+
   const handleSelect = (item: T) => {
     onSelectItem(item);
     setOpen(false);
   };
-  
-  const handleInputChange = (search: string) => {
-      setQuery(search);
-      if (setDisplayValue) {
-          setDisplayValue(search);
-      }
-  }
-  
-  const getDisplay = () => {
-    if(query && open) return query;
-    return displayValue || '';
-  }
+
+  React.useEffect(() => {
+    if (!open) {
+      setQuery('');
+      setVisibleItemsCount(INITIAL_VISIBLE_ITEMS);
+    }
+  }, [open]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -87,10 +92,10 @@ export function SearchableSelect<T extends { id: string }>({
             value={query} 
             onValueChange={setQuery}
           />
-          <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
           <CommandList>
+            <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
             <CommandGroup>
-              {filteredItems.map((item) => (
+              {itemsToShow.map((item) => (
                 <CommandItem
                   key={item.id}
                   value={item.id}
@@ -99,12 +104,22 @@ export function SearchableSelect<T extends { id: string }>({
                   <Check
                     className={cn(
                       'mr-2 h-4 w-4',
-                      displayValue === (item as any).nome || displayValue === (item as any).razaoSocial ? 'opacity-100' : 'opacity-0'
+                      selectedItemId === item.id ? 'opacity-100' : 'opacity-0'
                     )}
                   />
                   {renderItem(item)}
                 </CommandItem>
               ))}
+              {filteredItems.length > visibleItemsCount && (
+                <CommandItem
+                  onSelect={() => {
+                    setVisibleItemsCount(prev => prev + INITIAL_VISIBLE_ITEMS);
+                  }}
+                  className="justify-center text-center text-sm text-muted-foreground cursor-pointer"
+                >
+                  Exibir mais {Math.min(INITIAL_VISIBLE_ITEMS, filteredItems.length - visibleItemsCount)}...
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>

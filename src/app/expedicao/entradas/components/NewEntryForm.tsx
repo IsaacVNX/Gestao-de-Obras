@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from '@/components/ui/card';
 import type { Cliente } from '@/app/expedicao/cadastros/clientes/components/ClientManagement';
 import type { Produto } from '@/app/expedicao/cadastros/produtos/components/ProductManagement';
+import type { Transportadora } from '@/app/expedicao/cadastros/transportadoras/components/CarrierManagement';
 import { Textarea } from '@/components/ui/textarea';
 import { PhotoViewer } from '@/components/PhotoViewer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -32,6 +34,7 @@ const itemSchema = z.object({
   id: z.string(),
   produtoId: z.string().min(1, "Selecione um produto."),
   descricao: z.string(),
+  unidadeMedida: z.string(),
   quantidade: z.coerce.number().min(1, "A quantidade deve ser maior que zero."),
   metroLinearUnitario: z.number(),
   pesoBrutoUnitario: z.number(),
@@ -41,6 +44,7 @@ const itemSchema = z.object({
 
 const romaneioSchema = z.object({
   clienteId: z.string().min(1, "Selecione um cliente."),
+  transportadoraId: z.string().optional(),
   cnpj: z.string(),
   nomeObra: z.string().min(1, "O nome da obra é obrigatório."),
   orcamento: z.string().optional(),
@@ -80,9 +84,11 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
   
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [clienteDisplayValue, setClienteDisplayValue] = useState('');
+  const [transportadoraDisplayValue, setTransportadoraDisplayValue] = useState('');
   
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,9 +104,12 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
       notaFiscal: '',
       cidade: '',
       uf: '',
-      items: [],
+      items: [
+        { id: '1', produtoId: '', descricao: '', unidadeMedida: '', quantidade: 1, metroLinearUnitario: 0, pesoBrutoUnitario: 0, metroLinearTotal: 0, pesoTotal: 0 }
+      ],
       fotos: [],
       observacoes: '',
+      transportadoraId: '',
     },
   });
 
@@ -117,14 +126,25 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [clientesSnapshot, produtosSnapshot] = await Promise.all([
+      const [clientesSnapshot, produtosSnapshot, transportadorasSnapshot] = await Promise.all([
         getDocs(collection(db, 'clientes_expedicao')),
         getDocs(collection(db, 'produtos_expedicao')),
+        getDocs(collection(db, 'transportadoras_expedicao')),
       ]);
-      const clientesList = clientesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
-      const produtosList = produtosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Produto));
+      
+      const clientesList = clientesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente))
+        .sort((a, b) => (a.razaoSocial || a.nomeCompleto || '').localeCompare(b.razaoSocial || b.nomeCompleto || ''));
+        
+      const produtosList = produtosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Produto))
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+
+      const transportadorasList = transportadorasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transportadora))
+        .sort((a, b) => (a.razaoSocial || a.nomeCompleto || '').localeCompare(b.razaoSocial || b.nomeCompleto || ''));
+
       setClientes(clientesList);
       setProdutos(produtosList);
+      setTransportadoras(transportadorasList);
+
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erro ao carregar dados', description: 'Não foi possível buscar clientes e produtos.' });
     } finally {
@@ -158,11 +178,17 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
     setClienteDisplayValue(cliente.razaoSocial || cliente.nomeCompleto || '');
   };
   
+  const handleCarrierSelect = (carrier: Transportadora) => {
+    form.setValue('transportadoraId', carrier.id, { shouldDirty: true });
+    setTransportadoraDisplayValue(carrier.razaoSocial || carrier.nomeCompleto || '');
+  }
+
   const handleProductSelect = (index: number, produto: Produto) => {
     update(index, {
         ...fields[index],
         produtoId: produto.id,
         descricao: produto.nome,
+        unidadeMedida: produto.unidadeMedida,
         metroLinearUnitario: produto.metroLinear || 0,
         pesoBrutoUnitario: produto.pesoBruto || 0,
     });
@@ -176,8 +202,18 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
   
   const calculateTotals = (index: number) => {
     const item = form.getValues(`items.${index}`);
-    const metroLinearTotal = (item.quantidade || 0) * (item.metroLinearUnitario || 0);
-    const pesoTotal = metroLinearTotal * (item.pesoBrutoUnitario || 0);
+    const quantidade = item.quantidade || 0;
+    const metroLinearUnitario = item.metroLinearUnitario || 0;
+    const pesoBrutoUnitario = item.pesoBrutoUnitario || 0;
+
+    const metroLinearTotal = quantidade * metroLinearUnitario;
+    
+    let pesoTotal;
+    if (item.unidadeMedida === 'PÇ') {
+        pesoTotal = metroLinearTotal * pesoBrutoUnitario;
+    } else {
+        pesoTotal = quantidade * pesoBrutoUnitario;
+    }
 
     update(index, {
         ...item,
@@ -191,6 +227,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
         id: (fields.length + 1).toString(),
         produtoId: '',
         descricao: '',
+        unidadeMedida: '',
         quantidade: 1,
         metroLinearUnitario: 0,
         pesoBrutoUnitario: 0,
@@ -310,6 +347,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
                             onSelectItem={handleClientSelect}
                             displayValue={clienteDisplayValue}
                             setDisplayValue={setClienteDisplayValue}
+                            selectedItemId={field.value}
                             renderItem={(item) => (
                                 <div className="flex justify-between w-full">
                                     <span>{item.razaoSocial || item.nomeCompleto}</span>
@@ -331,6 +369,30 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
                   <RHFormField name="nomeObra" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nome da Obra</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl><FormMessage /></FormItem>)}/>
                   <RHFormField name="orcamento" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nº Orçamento</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl></FormItem>)}/>
                   <RHFormField name="notaFiscal" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Nota Fiscal</FormLabel><FormControl><Input {...field} className="text-black bg-background border-border"/></FormControl><FormMessage /></FormItem>)}/>
+                  <RHFormField control={form.control} name="transportadoraId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-black">Transportadora</FormLabel>
+                      <SearchableSelect
+                        items={transportadoras}
+                        onSelectItem={handleCarrierSelect}
+                        displayValue={transportadoraDisplayValue}
+                        setDisplayValue={setTransportadoraDisplayValue}
+                        selectedItemId={field.value}
+                        renderItem={(item) => (
+                          <div className="flex justify-between w-full">
+                            <span>{item.razaoSocial || item.nomeCompleto}</span>
+                            <span className="text-xs text-muted-foreground">{item.cnpj || item.cpf}</span>
+                          </div>
+                        )}
+                        filterFunction={(item, query) =>
+                          (item.razaoSocial || '').toLowerCase().includes(query.toLowerCase()) ||
+                          (item.nomeCompleto || '').toLowerCase().includes(query.toLowerCase())
+                        }
+                        placeholder="Busque a transportadora"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )} />
                   <RHFormField name="cidade" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">Cidade</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border"/></FormControl></FormItem>)}/>
                   <RHFormField name="uf" control={form.control} render={({ field }) => (<FormItem><FormLabel className="text-black">UF</FormLabel><FormControl><Input {...field} disabled className="bg-gray-100 text-black border-border"/></FormControl></FormItem>)}/>
                 </div>
@@ -358,6 +420,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
                                                     items={produtos}
                                                     onSelectItem={(p) => handleProductSelect(index, p as Produto)}
                                                     displayValue={item.descricao}
+                                                    selectedItemId={field.value}
                                                     renderItem={(p) => (
                                                         <div className="flex justify-between w-full">
                                                             <span>{p.nome}</span>
@@ -382,7 +445,7 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
                                     <TableCell><Input value={form.watch(`items.${index}.metroLinearTotal`).toFixed(2)} disabled className="bg-gray-100 text-black border-border"/></TableCell>
                                     <TableCell><Input value={(form.watch(`items.${index}.pesoTotal`) || 0).toFixed(2)} disabled className="bg-gray-100 text-black border-border"/></TableCell>
                                     <TableCell>
-                                        <Button variant="ghost" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => remove(index)} disabled={fields.length === 1}><Trash2 className="h-4 w-4 text-destructive"/></Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -503,3 +566,6 @@ export const NewEntryForm = forwardRef<NewEntryFormHandle, NewEntryFormProps>(({
   );
 });
 NewEntryForm.displayName = "NewEntryForm";
+
+
+    
